@@ -1,0 +1,22 @@
+# Render blueprint for the realtime coordinator (persistent Node process).
+# The web frontend deploys separately to Vercel.
+services:
+  - type: web
+    name: monopoly-sol-coordinator
+    runtime: node
+    plan: starter
+    rootDir: .
+    buildCommand: npm i -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter server build
+    startCommand: pnpm --filter server start
+    healthCheckPath: /health
+    envVars:
+      - key: RPC_URL
+        value: https://api.devnet.solana.com
+      - key: PROGRAM_ID
+        sync: false
+      - key: AUTHORITY_KEYPAIR
+        sync: false
+      - key: WEB_ORIGIN
+        sync: false
+      - key: PORT
+        value: 4000

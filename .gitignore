@@ -1,0 +1,39 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+target/
+*.tsbuildinfo
+
+# Solana / Anchor
+program/target/
+program/.anchor/
+test-ledger/
+**/*.rs.bk
+
+# Secrets & keypairs (NEVER commit these)
+*.keypair.json
+authority-keypair.json
+**/keys/*.json
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Local tool scratch
+.playwright-mcp/
