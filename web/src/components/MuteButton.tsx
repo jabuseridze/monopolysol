@@ -4,7 +4,9 @@ import { useState } from "react";
 import { audio } from "@/lib/audio";
 
 export function MuteButton() {
-  const [muted, setMuted] = useState(false);
+  // Seeded from the audio manager rather than hardcoded, so the icon reflects
+  // reality — audio currently defaults to muted (see lib/audio.ts).
+  const [muted, setMuted] = useState(audio.muted);
 
   const toggle = () => {
     const next = !muted;

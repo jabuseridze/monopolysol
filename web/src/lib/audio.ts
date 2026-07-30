@@ -5,7 +5,12 @@
  */
 class AudioManager {
   private ctx: AudioContext | null = null;
-  muted = false;
+  /**
+   * All SFX are muted by default for now. Every sound routes through tone(),
+   * which early-returns while this is true, so this single flag is the global
+   * off switch. Flip to `false` (or hit the in-app mute toggle) to re-enable.
+   */
+  muted = true;
 
   private ensure(): AudioContext | null {
     if (typeof window === "undefined") return null;

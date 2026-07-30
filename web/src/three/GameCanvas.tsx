@@ -29,12 +29,14 @@ export function GameCanvas() {
     }
   }, [settled?.at]);
 
+  // Countdown blip is disabled for now (kept wired up so it's a one-line
+  // re-enable): uncomment the audio.blip() call below to bring it back.
   const lastBlip = useRef(0);
   useEffect(() => {
     const s = round?.secondsLeft ?? 99;
     if (round?.phase === "open" && s <= 5 && s > 0 && s !== lastBlip.current) {
       lastBlip.current = s;
-      audio.blip();
+      // audio.blip();
     }
   }, [round?.secondsLeft, round?.phase]);
 
