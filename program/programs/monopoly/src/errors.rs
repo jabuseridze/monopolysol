@@ -30,4 +30,6 @@ pub enum GameError {
     InsufficientTreasury,
     #[msg("Arithmetic overflow")]
     Overflow,
+    #[msg("Guess must be within the valid dice-sum range")]
+    InvalidGuess,
 }

@@ -47,7 +47,7 @@ pub fn handler(ctx: Context<Payout>) -> Result<()> {
     let pick = &mut ctx.accounts.pick;
     require!(!pick.claimed, GameError::AlreadyClaimed);
     require!(
-        pick.tile_index == round.winning_tile,
+        pick.guess == round.dice_a as u16 + round.dice_b as u16,
         GameError::NotAWinner
     );
 

@@ -9,9 +9,10 @@ import { LAMPORTS_PER_SOL, SystemProgram } from "@solana/web3.js";
 const NUM_TILES = 40;
 const PRIZE_LAMPORTS = LAMPORTS_PER_SOL / 2; // 0.5 SOL
 // On-chain round_duration == the picking window. The coordinator adds the
-// short draw-sequence afterward so the full player-facing cadence is ~120s.
-const ROUND_DURATION = 105; // seconds
-const INITIAL_FUNDING = 5 * LAMPORTS_PER_SOL;
+// draw-sequence afterward (now includes dice + walk choreography), so this
+// leaves more headroom than the tile-lottery era's 105s.
+const ROUND_DURATION = 95; // seconds
+const INITIAL_FUNDING = 20 * LAMPORTS_PER_SOL;
 
 module.exports = async function (provider: anchor.AnchorProvider) {
   anchor.setProvider(provider);
@@ -37,9 +38,15 @@ module.exports = async function (provider: anchor.AnchorProvider) {
     console.log("Config already initialized; skipping.");
   }
 
-  await program.methods
-    .fundTreasury(new anchor.BN(INITIAL_FUNDING))
-    .accounts({ funder: provider.wallet.publicKey, treasury, systemProgram: SystemProgram.programId })
-    .rpc();
-  console.log(`Funded treasury (${treasury.toBase58()}) with ${INITIAL_FUNDING} lamports`);
+  // Re-running migrate() shouldn't silently top up devnet SOL every time; only
+  // re-fund when explicitly requested.
+  if (process.env.FORCE_REFUND === "1") {
+    await program.methods
+      .fundTreasury(new anchor.BN(INITIAL_FUNDING))
+      .accounts({ funder: provider.wallet.publicKey, treasury, systemProgram: SystemProgram.programId })
+      .rpc();
+    console.log(`Funded treasury (${treasury.toBase58()}) with ${INITIAL_FUNDING} lamports`);
+  } else {
+    console.log("Skipping treasury fund (set FORCE_REFUND=1 to re-fund).");
+  }
 };

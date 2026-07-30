@@ -108,6 +108,9 @@
           "writable": true
         },
         {
+          "name": "treasury"
+        },
+        {
           "name": "round",
           "writable": true
         },
@@ -128,16 +131,16 @@
       ]
     },
     {
-      "name": "pick_tile",
+      "name": "submit_guess",
       "discriminator": [
-        228,
-        140,
-        53,
-        111,
-        167,
-        50,
-        67,
-        127
+        61,
+        124,
+        32,
+        227,
+        64,
+        198,
+        252,
+        3
       ],
       "accounts": [
         {
@@ -162,7 +165,7 @@
       ],
       "args": [
         {
-          "name": "tile_index",
+          "name": "guess",
           "type": "u16"
         }
       ]
@@ -185,7 +188,8 @@
           "signer": true
         },
         {
-          "name": "config"
+          "name": "config",
+          "writable": true
         },
         {
           "name": "round",
@@ -400,6 +404,11 @@
       "code": 6013,
       "name": "Overflow",
       "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6014,
+      "name": "InvalidGuess",
+      "msg": "Guess must be within the valid dice-sum range"
     }
   ],
   "types": [
@@ -442,7 +451,7 @@
             "type": "u64"
           },
           {
-            "name": "rolloverLamports",
+            "name": "nextPrizeLamports",
             "type": "u64"
           },
           {
@@ -456,6 +465,10 @@
           {
             "name": "currentRound",
             "type": "u64"
+          },
+          {
+            "name": "avatarPosition",
+            "type": "u16"
           }
         ]
       }
@@ -508,7 +521,7 @@
             }
           },
           {
-            "name": "winningTile",
+            "name": "landedTile",
             "type": "u16"
           },
           {
@@ -534,6 +547,22 @@
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "diceA",
+            "type": "u8"
+          },
+          {
+            "name": "diceB",
+            "type": "u8"
+          },
+          {
+            "name": "startTile",
+            "type": "u16"
+          },
+          {
+            "name": "nextPrizeLamports",
+            "type": "u64"
           }
         ]
       }
@@ -552,7 +581,7 @@
             "type": "u64"
           },
           {
-            "name": "tileIndex",
+            "name": "guess",
             "type": "u16"
           },
           {

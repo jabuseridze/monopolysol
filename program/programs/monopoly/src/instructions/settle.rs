@@ -32,27 +32,12 @@ pub fn handler(ctx: Context<Settle>, winners_count: u32) -> Result<()> {
     require!(round.phase == Phase::Drawn, GameError::NotDrawn);
 
     round.winners_count = winners_count;
-
-    if winners_count == 0 {
-        // No winners: roll the prize into the next round.
-        let config = &mut ctx.accounts.config;
-        config.rollover_lamports = config
-            .rollover_lamports
-            .checked_add(round.prize_lamports)
-            .ok_or(GameError::Overflow)?;
-        msg!(
-            "Round {} settled with no winners; {} lamports rolled over",
-            round.round_id,
-            round.prize_lamports
-        );
-    } else {
-        msg!(
-            "Round {} settled with {} winner(s)",
-            round.round_id,
-            winners_count
-        );
-    }
-
     round.phase = Phase::Settled;
+
+    msg!(
+        "Round {} settled with {} winner(s)",
+        round.round_id,
+        winners_count
+    );
     Ok(())
 }

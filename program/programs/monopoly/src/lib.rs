@@ -1,5 +1,6 @@
 use anchor_lang::prelude::*;
 
+pub mod effects;
 pub mod errors;
 pub mod instructions;
 pub mod state;
@@ -34,9 +35,9 @@ pub mod monopoly {
         instructions::open_round::handler(ctx, commit_hash)
     }
 
-    /// A player picks a tile for the current round (one pick per wallet).
-    pub fn pick_tile(ctx: Context<PickTile>, tile_index: u16) -> Result<()> {
-        instructions::pick_tile::handler(ctx, tile_index)
+    /// A player submits a dice-sum guess for the current round (one guess per wallet).
+    pub fn submit_guess(ctx: Context<SubmitGuess>, guess: u16) -> Result<()> {
+        instructions::submit_guess::handler(ctx, guess)
     }
 
     /// Authority reveals the seed after lock; program derives the winning tile.

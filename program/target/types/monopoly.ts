@@ -114,6 +114,9 @@ export type Monopoly = {
           "writable": true
         },
         {
+          "name": "treasury"
+        },
+        {
           "name": "round",
           "writable": true
         },
@@ -134,16 +137,16 @@ export type Monopoly = {
       ]
     },
     {
-      "name": "pickTile",
+      "name": "submitGuess",
       "discriminator": [
-        228,
-        140,
-        53,
-        111,
-        167,
-        50,
-        67,
-        127
+        61,
+        124,
+        32,
+        227,
+        64,
+        198,
+        252,
+        3
       ],
       "accounts": [
         {
@@ -168,7 +171,7 @@ export type Monopoly = {
       ],
       "args": [
         {
-          "name": "tileIndex",
+          "name": "guess",
           "type": "u16"
         }
       ]
@@ -191,7 +194,8 @@ export type Monopoly = {
           "signer": true
         },
         {
-          "name": "config"
+          "name": "config",
+          "writable": true
         },
         {
           "name": "round",
@@ -406,6 +410,11 @@ export type Monopoly = {
       "code": 6013,
       "name": "overflow",
       "msg": "Arithmetic overflow"
+    },
+    {
+      "code": 6014,
+      "name": "invalidGuess",
+      "msg": "Guess must be within the valid dice-sum range"
     }
   ],
   "types": [
@@ -448,7 +457,7 @@ export type Monopoly = {
             "type": "u64"
           },
           {
-            "name": "rolloverLamports",
+            "name": "nextPrizeLamports",
             "type": "u64"
           },
           {
@@ -462,6 +471,10 @@ export type Monopoly = {
           {
             "name": "currentRound",
             "type": "u64"
+          },
+          {
+            "name": "avatarPosition",
+            "type": "u16"
           }
         ]
       }
@@ -514,7 +527,7 @@ export type Monopoly = {
             }
           },
           {
-            "name": "winningTile",
+            "name": "landedTile",
             "type": "u16"
           },
           {
@@ -540,6 +553,22 @@ export type Monopoly = {
           {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "diceA",
+            "type": "u8"
+          },
+          {
+            "name": "diceB",
+            "type": "u8"
+          },
+          {
+            "name": "startTile",
+            "type": "u16"
+          },
+          {
+            "name": "nextPrizeLamports",
+            "type": "u64"
           }
         ]
       }
@@ -558,7 +587,7 @@ export type Monopoly = {
             "type": "u64"
           },
           {
-            "name": "tileIndex",
+            "name": "guess",
             "type": "u16"
           },
           {

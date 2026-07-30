@@ -1,6 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::solana_program::keccak;
 
+use crate::effects;
 use crate::errors::GameError;
 use crate::state::{GlobalConfig, Phase, Round};
 
@@ -9,7 +10,7 @@ pub struct RevealAndDraw<'info> {
     #[account(address = config.authority @ GameError::Unauthorized)]
     pub authority: Signer<'info>,
 
-    #[account(seeds = [b"config"], bump = config.config_bump)]
+    #[account(mut, seeds = [b"config"], bump = config.config_bump)]
     pub config: Account<'info, GlobalConfig>,
 
     #[account(
@@ -31,21 +32,44 @@ pub fn handler(ctx: Context<RevealAndDraw>, seed: [u8; 32]) -> Result<()> {
     let computed = keccak::hashv(&[&seed]).to_bytes();
     require!(computed == round.commit_hash, GameError::BadReveal);
 
-    // Winner = keccak256(seed || round_id) mod num_tiles. Deterministic and
-    // independently verifiable by anyone holding the revealed seed.
+    // Dice = two disjoint 8-byte windows of the same hash. Do not derive `b` by
+    // shifting `a`'s window -- that would correlate the two dice.
     let mix = keccak::hashv(&[&seed, &round.round_id.to_le_bytes()]).to_bytes();
-    let n = u64::from_le_bytes(mix[0..8].try_into().unwrap());
-    let num_tiles = ctx.accounts.config.num_tiles as u64;
-    let winning_tile = (n % num_tiles) as u16;
+    let dice_a = (u64::from_le_bytes(mix[0..8].try_into().unwrap()) % 6) as u8 + 1;
+    let dice_b = (u64::from_le_bytes(mix[8..16].try_into().unwrap()) % 6) as u8 + 1;
+    let sum = dice_a as u16 + dice_b as u16;
+
+    let config = &mut ctx.accounts.config;
+    let num_tiles = config.num_tiles;
+    let start_tile = config.avatar_position;
+    let new_pos = (start_tile + sum) % num_tiles;
+    // Double-count collapse: "landed exactly on GO" and "passed GO" can both be
+    // true for the same roll (start + sum == num_tiles) -- treat that as a
+    // single GO bonus, never two.
+    let passed_or_landed_go = (start_tile + sum >= num_tiles) || (new_pos == 0);
+
+    let next_prize = effects::next_prize_for(new_pos, config.prize_lamports, passed_or_landed_go);
 
     round.revealed_seed = seed;
-    round.winning_tile = winning_tile;
+    round.landed_tile = new_pos;
+    round.dice_a = dice_a;
+    round.dice_b = dice_b;
+    round.start_tile = start_tile;
+    round.next_prize_lamports = next_prize;
     round.phase = Phase::Drawn;
 
+    config.avatar_position = new_pos;
+    config.next_prize_lamports = next_prize;
+
     msg!(
-        "Round {} drawn: winning tile {}",
+        "Round {} drawn: dice {}+{}={}, landed tile {} (start {}), next prize {} lamports",
         round.round_id,
-        winning_tile
+        dice_a,
+        dice_b,
+        sum,
+        new_pos,
+        start_tile,
+        next_prize
     );
     Ok(())
 }

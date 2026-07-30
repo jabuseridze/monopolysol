@@ -39,10 +39,11 @@ pub fn handler(
     config.config_bump = ctx.bumps.config;
     config.treasury_bump = ctx.bumps.treasury;
     config.prize_lamports = prize_lamports;
-    config.rollover_lamports = 0;
+    config.next_prize_lamports = prize_lamports;
     config.num_tiles = num_tiles;
     config.round_duration = round_duration;
     config.current_round = 0;
+    config.avatar_position = 0;
 
     ctx.accounts.treasury.bump = ctx.bumps.treasury;
 

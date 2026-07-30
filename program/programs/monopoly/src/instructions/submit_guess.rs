@@ -1,10 +1,11 @@
 use anchor_lang::prelude::*;
 
+use crate::effects;
 use crate::errors::GameError;
 use crate::state::{GlobalConfig, Phase, PlayerPick, Round};
 
 #[derive(Accounts)]
-pub struct PickTile<'info> {
+pub struct SubmitGuess<'info> {
     #[account(mut)]
     pub player: Signer<'info>,
 
@@ -18,7 +19,7 @@ pub struct PickTile<'info> {
     )]
     pub round: Account<'info, Round>,
 
-    // `init` fails if the wallet already picked this round -> no double picks.
+    // `init` fails if the wallet already guessed this round -> no double guesses.
     #[account(
         init,
         payer = player,
@@ -31,31 +32,30 @@ pub struct PickTile<'info> {
     pub system_program: Program<'info, System>,
 }
 
-pub fn handler(ctx: Context<PickTile>, tile_index: u16) -> Result<()> {
+pub fn handler(ctx: Context<SubmitGuess>, guess: u16) -> Result<()> {
     let round = &mut ctx.accounts.round;
 
     require!(round.phase == Phase::Open, GameError::RoundNotOpen);
     let now = Clock::get()?.unix_timestamp;
     require!(now < round.locks_at, GameError::PickingClosed);
-    require!(
-        tile_index < ctx.accounts.config.num_tiles,
-        GameError::InvalidTile
-    );
+
+    let (min, max) = effects::guess_range();
+    require!((min..=max).contains(&guess), GameError::InvalidGuess);
 
     let pick = &mut ctx.accounts.pick;
     pick.player = ctx.accounts.player.key();
     pick.round_id = round.round_id;
-    pick.tile_index = tile_index;
+    pick.guess = guess;
     pick.claimed = false;
     pick.bump = ctx.bumps.pick;
 
     round.total_picks = round.total_picks.checked_add(1).ok_or(GameError::Overflow)?;
 
     msg!(
-        "Round {}: {} picked tile {}",
+        "Round {}: {} guessed {}",
         round.round_id,
         pick.player,
-        tile_index
+        guess
     );
     Ok(())
 }
