@@ -42,32 +42,72 @@ export function commitOf(seed: Buffer): number[] {
   return Array.from(Buffer.from(keccak256.arrayBuffer(seed)));
 }
 
-/** Reproduce the on-chain winning-tile derivation for verification in tests. */
-export function expectedWinningTile(
-  seed: Buffer,
-  roundId: number,
-  numTiles: number
-): number {
-  const mix = Buffer.from(keccak256.arrayBuffer(Buffer.concat([seed, u64le(roundId)])));
-  const n = mix.readBigUInt64LE(0);
-  return Number(n % BigInt(numTiles));
-}
-
 export function randomSeed(): Buffer {
   return Buffer.from(anchor.web3.Keypair.generate().secretKey.slice(0, 32));
 }
 
-/** Brute-force a seed whose derived winning tile equals `targetTile`. */
-export function findSeedForTile(
+/**
+ * Reproduce the on-chain dice derivation for verification in tests:
+ * `mix = keccak256(seed || round_id_le)`; die A is `mix[0..8]` as a little-endian
+ * u64 mod 6 + 1, die B is the disjoint `mix[8..16]` window mod 6 + 1 (see
+ * `reveal_and_draw.rs` -- the two dice deliberately read non-overlapping byte
+ * windows of the same hash so they aren't correlated).
+ */
+export function expectedDice(
+  seed: Buffer,
+  roundId: number | bigint
+): { a: number; b: number; sum: number } {
+  const mix = Buffer.from(
+    keccak256.arrayBuffer(Buffer.concat([seed, u64le(roundId)]))
+  );
+  const a = Number(mix.readBigUInt64LE(0) % 6n) + 1;
+  const b = Number(mix.readBigUInt64LE(8) % 6n) + 1;
+  return { a, b, sum: a + b };
+}
+
+/** Brute-force a seed whose derived dice sum equals `targetSum` (2..=12).
+ * P(sum) per try is at best 1/36 (sum 2 or 12), so 100_000 tries fails with
+ * effectively zero probability. */
+export function findSeedForDiceSum(
   roundId: number,
-  numTiles: number,
-  targetTile: number
+  targetSum: number,
+  maxTries = 100_000
 ): Buffer {
-  for (let i = 0; i < 100_000; i++) {
+  for (let i = 0; i < maxTries; i++) {
     const seed = randomSeed();
-    if (expectedWinningTile(seed, roundId, numTiles) === targetTile) return seed;
+    if (expectedDice(seed, roundId).sum === targetSum) return seed;
   }
-  throw new Error("Could not find a seed for the target tile");
+  throw new Error(`Could not find a seed for dice sum ${targetSum}`);
+}
+
+/** Pure-math check (no brute force): the dice sum needed to land on
+ * `targetTile` from `startTile`, or null if unreachable in a single roll.
+ * Only 11 of `numTiles` tiles (position+2..position+12) are ever reachable
+ * from a given position -- callers must check this before hunting a seed. */
+export function sumToReach(
+  startTile: number,
+  targetTile: number,
+  numTiles: number
+): number | null {
+  const sum = (((targetTile - startTile) % numTiles) + numTiles) % numTiles;
+  return sum >= 2 && sum <= 12 ? sum : null;
+}
+
+/** Brute-force a seed that lands the avatar exactly on `targetTile` from
+ * `startTile`. Throws if `targetTile` isn't reachable in one roll -- callers
+ * should check `sumToReach` first (or pick a target known to be reachable). */
+export function findSeedForLanding(
+  roundId: number,
+  startTile: number,
+  targetTile: number,
+  numTiles: number,
+  maxTries = 100_000
+): Buffer {
+  const sum = sumToReach(startTile, targetTile, numTiles);
+  if (sum === null) {
+    throw new Error(`Tile ${targetTile} is not reachable from ${startTile} in one roll`);
+  }
+  return findSeedForDiceSum(roundId, sum, maxTries);
 }
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
