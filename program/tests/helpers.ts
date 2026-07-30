@@ -1,6 +1,8 @@
 import * as anchor from "@coral-xyz/anchor";
-import { PublicKey } from "@solana/web3.js";
+import { Program } from "@coral-xyz/anchor";
+import { PublicKey, SystemProgram } from "@solana/web3.js";
 import { keccak256 } from "js-sha3";
+import { Monopoly } from "../target/types/monopoly";
 
 const enc = (s: string) => Buffer.from(s);
 
@@ -69,3 +71,35 @@ export function findSeedForTile(
 }
 
 export const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * Idempotent initialize: fetches GlobalConfig, only calls `initialize` if it
+ * doesn't exist yet. Lets both spec files call this from a `before()` hook
+ * without assuming which file's test suite runs first (mocha globs
+ * `tests/**\/*.ts` and sorts alphabetically, so `monopoly.errors.ts` actually
+ * runs before `monopoly.ts`).
+ */
+export async function ensureInitialized(
+  program: Program<Monopoly>,
+  authority: { publicKey: PublicKey },
+  prizeLamports: number,
+  numTiles: number,
+  roundDuration: number
+): Promise<PublicKey> {
+  const pid = program.programId;
+  const config = configPda(pid);
+  const treasury = treasuryPda(pid);
+  const existing = await program.account.globalConfig.fetchNullable(config);
+  if (!existing) {
+    await program.methods
+      .initialize(new anchor.BN(prizeLamports), numTiles, roundDuration)
+      .accounts({
+        authority: authority.publicKey,
+        config,
+        treasury,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+  }
+  return config;
+}

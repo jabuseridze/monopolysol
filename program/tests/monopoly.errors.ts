@@ -5,9 +5,15 @@ import { assert } from "chai";
 import { Monopoly } from "../target/types/monopoly";
 import * as h from "./helpers";
 
+const NUM_TILES = 40;
+const PRIZE = LAMPORTS_PER_SOL / 2; // 0.5 SOL
+const DURATION = 8; // short for tests, but long enough for two sequential airdrop+confirm round-trips
+
 /**
- * These tests assume `monopoly.ts` already ran initialize (config exists) since
- * mocha runs files in the same validator session. Round ids continue from there.
+ * Round ids continue from whatever config.currentRound already is when each
+ * test runs — mocha globs tests/**\/*.ts and sorts alphabetically, so this
+ * file actually runs BEFORE monopoly.ts, not after. ensureInitialized() in
+ * before() makes this file work whichever order mocha picks.
  */
 describe("monopoly: rejections", () => {
   const provider = anchor.AnchorProvider.env();
@@ -16,6 +22,10 @@ describe("monopoly: rejections", () => {
   const pid = program.programId;
   const authority = provider.wallet;
   const config = h.configPda(pid);
+
+  before(async () => {
+    await h.ensureInitialized(program, authority, PRIZE, NUM_TILES, DURATION);
+  });
 
   async function airdrop(kp: Keypair, sol = 2) {
     const sig = await provider.connection.requestAirdrop(kp.publicKey, sol * LAMPORTS_PER_SOL);
@@ -66,7 +76,7 @@ describe("monopoly: rejections", () => {
       .accounts({ authority: authority.publicKey, config, round, systemProgram: SystemProgram.programId })
       .rpc();
 
-    await h.sleep(2500);
+    await h.sleep(DURATION * 1000 + 500);
 
     let msg = "";
     try {

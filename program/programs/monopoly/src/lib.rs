@@ -8,7 +8,7 @@ use instructions::*;
 
 // Placeholder program id. Run `anchor keys sync` after `anchor build` to replace
 // this with the real deployed program id (also update Anchor.toml + web/server env).
-declare_id!("Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS");
+declare_id!("ENAjUrMvqvzjM7Fr7qM19FTpurYYAB9BzLygz8xgbL3d");
 
 #[program]
 pub mod monopoly {

@@ -7,7 +7,7 @@ import * as h from "./helpers";
 
 const NUM_TILES = 40;
 const PRIZE = LAMPORTS_PER_SOL / 2; // 0.5 SOL
-const DURATION = 2; // short for tests
+const DURATION = 8; // short for tests, but long enough for two sequential airdrop+confirm round-trips
 
 describe("monopoly: happy path + split payout", () => {
   const provider = anchor.AnchorProvider.env();
@@ -19,16 +19,18 @@ describe("monopoly: happy path + split payout", () => {
   const config = h.configPda(pid);
   const treasury = h.treasuryPda(pid);
 
+  before(async () => {
+    await h.ensureInitialized(program, authority, PRIZE, NUM_TILES, DURATION);
+  });
+
   async function airdrop(kp: Keypair, sol = 2) {
     const sig = await provider.connection.requestAirdrop(kp.publicKey, sol * LAMPORTS_PER_SOL);
     await provider.connection.confirmTransaction(sig, "confirmed");
   }
 
   it("initializes config + treasury", async () => {
-    await program.methods
-      .initialize(new anchor.BN(PRIZE), NUM_TILES, DURATION)
-      .accounts({ authority: authority.publicKey, config, treasury, systemProgram: SystemProgram.programId })
-      .rpc();
+    // ensureInitialized() in before() already created config+treasury (idempotently,
+    // since mocha may run monopoly.errors.ts first and initialize there instead).
     const cfg = await program.account.globalConfig.fetch(config);
     assert.equal(cfg.numTiles, NUM_TILES);
     assert.equal(cfg.prizeLamports.toNumber(), PRIZE);
@@ -44,7 +46,11 @@ describe("monopoly: happy path + split payout", () => {
   });
 
   it("runs a full round with two winners splitting the prize", async () => {
-    const roundId = 1;
+    // Round ids are sequential from whatever config.currentRound already is —
+    // monopoly.errors.ts may have opened earlier rounds first (mocha sorts
+    // that file before this one), so this cannot assume roundId === 1.
+    const cfgBefore = await program.account.globalConfig.fetch(config);
+    const roundId = cfgBefore.currentRound.toNumber() + 1;
     const targetTile = 7;
     const seed = h.findSeedForTile(roundId, NUM_TILES, targetTile);
     const round = h.roundPda(pid, roundId);

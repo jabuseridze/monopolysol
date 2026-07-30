@@ -5,11 +5,11 @@ anchor_version = "0.30.1"
 resolution = true
 skip-lint = false
 
-[programs.localnet]
-monopoly = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
-
 [programs.devnet]
-monopoly = "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
+monopoly = "ENAjUrMvqvzjM7Fr7qM19FTpurYYAB9BzLygz8xgbL3d"
+
+[programs.localnet]
+monopoly = "ENAjUrMvqvzjM7Fr7qM19FTpurYYAB9BzLygz8xgbL3d"
 
 [registry]
 url = "https://api.apr.dev"

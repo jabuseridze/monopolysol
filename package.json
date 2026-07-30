@@ -14,5 +14,10 @@
     "build:server": "pnpm --filter server build",
     "typecheck": "pnpm -r --if-present typecheck",
     "lint": "pnpm -r --if-present lint"
+  },
+  "pnpm": {
+    "overrides": {
+      "@solana/web3.js": "1.95.4"
+    }
   }
 }

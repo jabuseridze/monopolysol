@@ -11,10 +11,22 @@ target/
 *.tsbuildinfo
 
 # Solana / Anchor
-program/target/
 program/.anchor/
 test-ledger/
 **/*.rs.bk
+
+# Anchor's idl-build step is broken in this environment (see program/Cargo.toml
+# for the proc-macro2 patch, and the IDL file's own "metadata.description" for
+# the full explanation). target/idl/monopoly.json and target/types/monopoly.ts
+# are hand-maintained source until that's fixed, so keep the rest of target/
+# ignored but carve those two files back out (a parent-directory exclusion
+# can't be undone from inside, hence negating program/target/ itself first).
+!program/target/
+program/target/*
+!program/target/idl/
+!program/target/idl/monopoly.json
+!program/target/types/
+!program/target/types/monopoly.ts
 
 # Secrets & keypairs (NEVER commit these)
 *.keypair.json

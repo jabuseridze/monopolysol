@@ -11,3 +11,12 @@ codegen-units = 1
 opt-level = 3
 incremental = false
 codegen-units = 1
+
+# Anchor's IDL-build step forces RUSTC_BOOTSTRAP=1 to unlock proc-macro2's
+# unstable Span::source_file() path, but the upstream proc_macro::SourceFile
+# type it relies on has been removed from newer rustc's unstable surface.
+# The actual on-chain program build is unaffected by this patch. See
+# vendor/proc-macro2-1.0.91/src/wrapper.rs for the exact change.
+[patch.crates-io]
+proc-macro2 = { path = "vendor/proc-macro2-1.0.91" }
+
