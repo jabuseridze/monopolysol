@@ -32,7 +32,7 @@ export async function openNewRound(
   if (!round) throw new Error(`round ${roundId} account missing after open`);
   const locksAtMs = Number(round.locksAt) * 1000;
 
-  ctx.setState(openSnapshot(roundId, round, cfg.numTiles, toHex(secret.commitHash)));
+  ctx.setState(openSnapshot(roundId, round, cfg.numTiles, toHex(secret.commitHash), ctx.clock.now()));
   console.log(`[roundLoop] opened round ${roundId} (prize ${round.prizeLamports} lamports)`);
   return { roundId, locksAtMs, seed: secret.seed };
 }
@@ -53,9 +53,10 @@ export function resumeOpenRound(
     );
   }
   const locksAtMs = Number(round.locksAt) * 1000;
-  ctx.setState(openSnapshot(roundId, round, cfg.numTiles, stored.commitHex));
+  const nowMs = ctx.clock.now();
+  ctx.setState(openSnapshot(roundId, round, cfg.numTiles, stored.commitHex, nowMs));
   console.log(
-    `[roundLoop] resumed round ${roundId} in Open phase, ${Math.max(0, Math.ceil((locksAtMs - Date.now()) / 1000))}s left`
+    `[roundLoop] resumed round ${roundId} in Open phase, ${Math.max(0, Math.ceil((locksAtMs - nowMs) / 1000))}s left`
   );
   return { roundId, locksAtMs, seed: Buffer.from(stored.seedHex, "hex") };
 }
@@ -64,13 +65,14 @@ function openSnapshot(
   roundId: number,
   round: RoundData,
   numTiles: number,
-  commitHex: string
+  commitHex: string,
+  nowMs: number
 ): RoundStateDTO {
   const locksAtMs = Number(round.locksAt) * 1000;
   return {
     roundId,
     phase: "open",
-    secondsLeft: Math.max(0, Math.ceil((locksAtMs - Date.now()) / 1000)),
+    secondsLeft: Math.max(0, Math.ceil((locksAtMs - nowMs) / 1000)),
     locksAt: locksAtMs,
     prizeLamports: Number(round.prizeLamports),
     numTiles,

@@ -1,6 +1,7 @@
 import { DRAW_SEQUENCE_SEC, RoundStateDTO } from "@monopoly-sol/shared";
 import { PHASE_OPEN, PHASE_SETTLED } from "./anchorCodec.js";
 import { Chain } from "./chain.js";
+import { ClusterClock } from "./clusterClock.js";
 import { Emitter } from "./emitter.js";
 import { drawAndSettle, LoopCtx, pickingPhase } from "./roundPhases.js";
 import { openNewRound, resumeOpenRound } from "./roundOpen.js";
@@ -20,13 +21,21 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  *
  * This is what lets a `kill -9` mid-round resume the same round on restart
  * instead of orphaning it and opening a duplicate.
+ *
+ * Phase-boundary decisions use `ClusterClock` (`clusterClock.ts`), not raw
+ * `Date.now()`: the program gates `reveal_and_draw` on the cluster's own
+ * `Clock` sysvar, which can drift from host wall time (especially on a local
+ * validator). `drawAndSettle()` in `roundPhases.ts` polls the real cluster
+ * clock before firing the reveal tx, so this loop never speculatively fires
+ * a reveal the program will reject.
  */
 export class RoundLoop {
   private snapshot: RoundStateDTO = emptySnapshot();
   private readonly ctx: LoopCtx;
 
   constructor(private chain: Chain, private emit: Emitter, secretPath: string) {
-    this.ctx = { chain, emit, secretPath, setState: (patch) => this.setState(patch) };
+    const clock = new ClusterClock(chain);
+    this.ctx = { chain, emit, clock, secretPath, setState: (patch) => this.setState(patch) };
   }
 
   getSnapshot(): RoundStateDTO {
@@ -51,6 +60,7 @@ export class RoundLoop {
   }
 
   private async cycle(): Promise<void> {
+    await this.ctx.clock.sync();
     const cfg = await this.chain.getConfig();
     if (!cfg) {
       console.warn("[roundLoop] config not initialized; retrying...");
@@ -83,7 +93,7 @@ export class RoundLoop {
     }
 
     if (phase === PHASE_OPEN) {
-      if (Date.now() < locksAtMs) {
+      if (this.ctx.clock.now() < locksAtMs) {
         await pickingPhase(this.ctx, roundId, locksAtMs);
       } else {
         this.setState({ phase: "locked", secondsLeft: 0 });

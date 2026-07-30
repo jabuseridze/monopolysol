@@ -2,6 +2,7 @@ import { ALARM_LEAD_SEC, RoundStateDTO } from "@monopoly-sol/shared";
 import { landingFor } from "@monopoly-sol/shared/effects";
 import { PHASE_OPEN, RoundData } from "./anchorCodec.js";
 import { Chain } from "./chain.js";
+import { ClusterClock } from "./clusterClock.js";
 import { Emitter } from "./emitter.js";
 import { deriveDice } from "./seed.js";
 
@@ -13,18 +14,22 @@ import { deriveDice } from "./seed.js";
 export interface LoopCtx {
   chain: Chain;
   emit: Emitter;
+  clock: ClusterClock;
   secretPath: string;
   setState: (patch: Partial<RoundStateDTO>) => void;
 }
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
-/** Tick loop for the picking window. Exits as soon as `locksAtMs` passes. */
+/** Tick loop for the picking window. Exits once the (cluster-adjusted) clock
+ * reaches `locksAtMs`. Re-syncs the clock periodically so a long picking
+ * window doesn't drift on a stale offset. */
 export async function pickingPhase(ctx: LoopCtx, roundId: number, locksAtMs: number): Promise<void> {
   let cuedAlarm = false;
   let lastRefresh = 0;
-  while (Date.now() < locksAtMs) {
-    const secondsLeft = Math.max(0, Math.ceil((locksAtMs - Date.now()) / 1000));
+  let lastClockSync = 0;
+  while (ctx.clock.now() < locksAtMs) {
+    const secondsLeft = Math.max(0, Math.ceil((locksAtMs - ctx.clock.now()) / 1000));
     ctx.emit.tick(roundId, secondsLeft, "open");
     ctx.setState({ secondsLeft });
 
@@ -36,6 +41,10 @@ export async function pickingPhase(ctx: LoopCtx, roundId: number, locksAtMs: num
       lastRefresh = Date.now();
       const { counts } = await ctx.chain.getPicks(roundId);
       ctx.setState({ pickCounts: counts }); // TODO(Task 5): rename to guessCounts
+    }
+    if (Date.now() - lastClockSync > 10000) {
+      lastClockSync = Date.now();
+      await ctx.clock.sync();
     }
     await sleep(1000);
   }
@@ -63,6 +72,10 @@ export async function drawAndSettle(
         `round ${roundId} needs reveal but no seed is available (resumed without a persisted secret)`
       );
     }
+    // `reveal_and_draw.rs` gates on the *cluster* clock, not wall time -- wait
+    // for the chain's own clock to actually reach `locksAt` before firing the
+    // tx, rather than guessing from `Date.now()` and retrying on rejection.
+    await ctx.clock.waitUntil(Number(round.locksAt) * 1000);
     await ctx.chain.revealAndDraw(roundId, seed);
     round = await ctx.chain.getRound(roundId);
     if (!round) throw new Error(`round ${roundId} missing after reveal`);
