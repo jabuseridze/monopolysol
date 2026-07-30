@@ -9,12 +9,17 @@
     ".": "./src/index.ts",
     "./tiles": "./src/tiles.ts",
     "./types": "./src/types.ts",
-    "./constants": "./src/constants.ts"
+    "./constants": "./src/constants.ts",
+    "./effects": "./src/effects.ts",
+    "./ringPath": "./src/ringPath.ts",
+    "./layout": "./src/layout.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "devDependencies": {
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^1.6.0"
   }
 }
