@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import path from "node:path";
 import { Keypair, PublicKey } from "@solana/web3.js";
 import dotenv from "dotenv";
 
@@ -25,6 +26,12 @@ export interface AppConfig {
   port: number;
   /** Allowed browser origins for CORS (comma-separated in env). */
   corsOrigins: string[];
+  /**
+   * Where the in-flight round's commit-reveal secret is persisted (see
+   * `secrets.ts`). Lets the round loop resume the same round after a crash
+   * instead of losing the seed and stalling. Not committed -- see .gitignore.
+   */
+  roundSecretPath: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -37,6 +44,8 @@ export function loadConfig(): AppConfig {
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
+  const roundSecretPath =
+    process.env.ROUND_SECRET_PATH ?? path.resolve(process.cwd(), ".round-secret.json");
 
-  return { rpcUrl, programId, authority: loadAuthority(), port, corsOrigins };
+  return { rpcUrl, programId, authority: loadAuthority(), port, corsOrigins, roundSecretPath };
 }

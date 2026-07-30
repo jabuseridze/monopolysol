@@ -7,11 +7,12 @@ import {
   TransactionInstruction,
 } from "@solana/web3.js";
 import { AppConfig } from "./config.js";
-import { configPda, pickPda, roundPda, treasuryPda, u64le } from "./pdas.js";
+import { bs58le } from "./bs58.js";
+import { configPda, pickPda, roundPda, treasuryPda } from "./pdas.js";
 import {
   decodeConfig,
+  decodePickGuess,
   decodePickPlayer,
-  decodePickTile,
   decodeRound,
   ixDiscriminator,
   PICK_OFFSETS,
@@ -56,24 +57,30 @@ export class Chain {
     return info ? decodeRound(info.data) : null;
   }
 
-  /** Return { tileIndex -> count } and the winners for a given tile. */
+  /** Return { guessSum -> count } and the winners for a given guess sum (2-12). */
   async getPicks(roundId: number | bigint) {
     const accounts = await this.connection.getProgramAccounts(this.programId, {
       filters: [
-        // 8 disc + player(32) + round_id(8) + tile_index(2) + claimed(1) + bump(1)
+        // 8 disc + player(32) + round_id(8) + guess(2) + claimed(1) + bump(1)
         { dataSize: 52 },
         { memcmp: { offset: PICK_OFFSETS.roundId, bytes: bs58le(roundId) } },
       ],
     });
     const counts: Record<number, number> = {};
-    const byTile: Record<number, PublicKey[]> = {};
+    const byGuess: Record<number, PublicKey[]> = {};
     for (const { account } of accounts) {
-      const tile = decodePickTile(account.data);
+      const guess = decodePickGuess(account.data);
       const player = new PublicKey(decodePickPlayer(account.data));
-      counts[tile] = (counts[tile] ?? 0) + 1;
-      (byTile[tile] ??= []).push(player);
+      counts[guess] = (counts[guess] ?? 0) + 1;
+      (byGuess[guess] ??= []).push(player);
     }
-    return { counts, byTile };
+    return { counts, byGuess };
+  }
+
+  /** Treasury vault balance in lamports (used by the refill CLI's threshold check). */
+  async getTreasuryBalance(): Promise<number> {
+    const info = await this.connection.getAccountInfo(treasuryPda(this.programId));
+    return info?.lamports ?? 0;
   }
 
   /** `nextRoundId` must equal on-chain current_round + 1 (the seed the program derives). */
@@ -84,6 +91,7 @@ export class Chain {
       keys: [
         key(this.authority.publicKey, true, true),
         key(configPda(this.programId), false, true),
+        key(treasuryPda(this.programId), false, false),
         key(roundPda(this.programId, nextRoundId), false, true),
         key(SystemProgram.programId, false, false),
       ],
@@ -97,7 +105,9 @@ export class Chain {
       programId: this.programId,
       keys: [
         key(this.authority.publicKey, true, false),
-        key(configPda(this.programId), false, false),
+        // `config` is mut: reveal writes avatar_position + next_prize_lamports
+        // (Task 2's Rust `#[account(mut, ...)]` on RevealAndDraw::config).
+        key(configPda(this.programId), false, true),
         key(roundPda(this.programId, roundId), false, true),
       ],
       data,
@@ -134,29 +144,4 @@ export class Chain {
       data,
     }));
   }
-}
-
-/** base58 of a u64 little-endian value, for getProgramAccounts memcmp. */
-function bs58le(n: number | bigint): string {
-  // @solana/web3.js re-exports bs58 via PublicKey; encode manually.
-  return bs58encode(u64le(n));
-}
-
-// Minimal base58 encoder (Bitcoin alphabet) to avoid an extra dependency.
-const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function bs58encode(buf: Buffer): string {
-  let digits = [0];
-  for (const byte of buf) {
-    let carry = byte;
-    for (let i = 0; i < digits.length; i++) {
-      carry += digits[i]! << 8;
-      digits[i] = carry % 58;
-      carry = (carry / 58) | 0;
-    }
-    while (carry > 0) { digits.push(carry % 58); carry = (carry / 58) | 0; }
-  }
-  let str = "";
-  for (const b of buf) { if (b === 0) str += "1"; else break; }
-  for (let i = digits.length - 1; i >= 0; i--) str += ALPHABET[digits[i]!];
-  return str;
 }

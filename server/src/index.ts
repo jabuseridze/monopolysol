@@ -5,7 +5,8 @@ import { Server } from "socket.io";
 import { SOCKET_EVENTS } from "@monopoly-sol/shared";
 import { Chain } from "./chain.js";
 import { loadConfig } from "./config.js";
-import { Emitter, RoundLoop } from "./roundLoop.js";
+import { Emitter } from "./emitter.js";
+import { RoundLoop } from "./roundLoop.js";
 
 async function main() {
   const cfg = loadConfig();
@@ -37,7 +38,7 @@ async function main() {
       }),
   };
 
-  const loop = new RoundLoop(chain, emit);
+  const loop = new RoundLoop(chain, emit, cfg.roundSecretPath);
 
   io.on("connection", (socket) => {
     // Send the current snapshot immediately so late joiners are in sync.

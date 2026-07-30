@@ -1,25 +1,33 @@
-import {
-  ALARM_LEAD_SEC,
-  DRAW_SEQUENCE_SEC,
-  RoundStateDTO,
-} from "@monopoly-sol/shared";
+import { DRAW_SEQUENCE_SEC, RoundStateDTO } from "@monopoly-sol/shared";
+import { PHASE_OPEN, PHASE_SETTLED } from "./anchorCodec.js";
 import { Chain } from "./chain.js";
-import { deriveWinningTile, makeRoundSecret, toHex } from "./seed.js";
-
-export interface Emitter {
-  state: (s: RoundStateDTO) => void;
-  tick: (roundId: number, secondsLeft: number, phase: RoundStateDTO["phase"]) => void;
-  drawCue: (roundId: number, leadSeconds: number) => void;
-  drawResult: (roundId: number, winningTile: number, seedHex: string, commitHex: string) => void;
-  settled: (roundId: number, winningTile: number, winners: string[], prize: number, share: number, sig: string | null) => void;
-}
+import { Emitter } from "./emitter.js";
+import { drawAndSettle, LoopCtx, pickingPhase } from "./roundPhases.js";
+import { openNewRound, resumeOpenRound } from "./roundOpen.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
+/**
+ * Orchestration shell only -- per-phase logic lives in `roundOpen.ts` (open
+ * / resume-open) and `roundPhases.ts` (picking tick loop, reveal-through-
+ * payout). On every iteration (including after a recovered crash), `cycle()`
+ * reads the *current* on-chain round instead of blindly opening a new one:
+ *
+ *   - phase Open,  now <  locksAt -> resume the picking-window tick loop
+ *   - phase Open,  now >= locksAt -> skip straight to reveal
+ *   - phase Drawn                 -> skip picking + reveal, go to settle + payout
+ *   - phase Settled (or no round) -> open a new round
+ *
+ * This is what lets a `kill -9` mid-round resume the same round on restart
+ * instead of orphaning it and opening a duplicate.
+ */
 export class RoundLoop {
   private snapshot: RoundStateDTO = emptySnapshot();
+  private readonly ctx: LoopCtx;
 
-  constructor(private chain: Chain, private emit: Emitter) {}
+  constructor(private chain: Chain, private emit: Emitter, secretPath: string) {
+    this.ctx = { chain, emit, secretPath, setState: (patch) => this.setState(patch) };
+  }
 
   getSnapshot(): RoundStateDTO {
     return this.snapshot;
@@ -29,7 +37,7 @@ export class RoundLoop {
     // eslint-disable-next-line no-constant-condition
     while (true) {
       try {
-        await this.runRound();
+        await this.cycle();
       } catch (err) {
         console.error("[roundLoop] round failed:", err);
         await sleep(5000);
@@ -42,7 +50,7 @@ export class RoundLoop {
     this.emit.state(this.snapshot);
   }
 
-  private async runRound(): Promise<void> {
+  private async cycle(): Promise<void> {
     const cfg = await this.chain.getConfig();
     if (!cfg) {
       console.warn("[roundLoop] config not initialized; retrying...");
@@ -50,78 +58,39 @@ export class RoundLoop {
       return;
     }
 
-    const roundId = Number(cfg.currentRound) + 1;
-    const secret = makeRoundSecret();
-    await this.chain.openRound(roundId, secret.commitHash);
+    const currentRoundId = Number(cfg.currentRound);
+    const round = currentRoundId > 0 ? await this.chain.getRound(currentRoundId) : null;
 
-    const round = await this.chain.getRound(roundId);
-    if (!round) throw new Error("round account missing after open");
-    const locksAtMs = Number(round.locksAt) * 1000;
+    let roundId: number;
+    let locksAtMs: number;
+    let seed: Buffer | null;
+    let phase: number;
 
-    this.snapshot = {
-      roundId,
-      phase: "open",
-      secondsLeft: Math.max(0, Math.ceil((locksAtMs - Date.now()) / 1000)),
-      locksAt: locksAtMs,
-      prizeLamports: Number(round.prizeLamports),
-      numTiles: cfg.numTiles,
-      pickCounts: {},
-      commitHash: toHex(secret.commitHash),
-      winningTile: null,
-      revealedSeed: null,
-      winners: [],
-    };
-    this.emit.state(this.snapshot);
-
-    await this.pickingPhase(roundId, locksAtMs);
-    await this.drawPhase(roundId, secret.seed, cfg.numTiles);
-  }
-
-  private async pickingPhase(roundId: number, locksAtMs: number): Promise<void> {
-    let cuedAlarm = false;
-    let lastRefresh = 0;
-    while (Date.now() < locksAtMs) {
-      const secondsLeft = Math.max(0, Math.ceil((locksAtMs - Date.now()) / 1000));
-      this.snapshot.secondsLeft = secondsLeft;
-      this.emit.tick(roundId, secondsLeft, "open");
-
-      if (!cuedAlarm && secondsLeft <= ALARM_LEAD_SEC) {
-        cuedAlarm = true;
-        this.emit.drawCue(roundId, ALARM_LEAD_SEC);
-      }
-      if (Date.now() - lastRefresh > 4000) {
-        lastRefresh = Date.now();
-        const { counts } = await this.chain.getPicks(roundId);
-        this.setState({ pickCounts: counts });
-      }
-      await sleep(1000);
-    }
-    this.setState({ phase: "locked", secondsLeft: 0 });
-  }
-
-  private async drawPhase(roundId: number, seed: Buffer, numTiles: number): Promise<void> {
-    await this.chain.revealAndDraw(roundId, seed);
-    const winningTile = deriveWinningTile(seed, roundId, numTiles);
-    this.setState({ phase: "drawing", winningTile, revealedSeed: toHex(seed) });
-    this.emit.drawResult(roundId, winningTile, toHex(seed), this.snapshot.commitHash ?? "");
-
-    const { byTile } = await this.chain.getPicks(roundId);
-    const winners = (byTile[winningTile] ?? []).map((p) => p.toBase58());
-    await this.chain.settle(roundId, winners.length);
-
-    const prize = this.snapshot.prizeLamports;
-    const share = winners.length > 0 ? Math.floor(prize / winners.length) : 0;
-    let lastSig: string | null = null;
-    for (const w of byTile[winningTile] ?? []) {
-      try {
-        lastSig = await this.chain.payout(roundId, w);
-      } catch (e) {
-        console.error("[roundLoop] payout failed for", w.toBase58(), e);
+    if (!round || round.phase === PHASE_SETTLED) {
+      const opened = await openNewRound(this.ctx, cfg);
+      ({ roundId, locksAtMs, seed } = opened);
+      phase = PHASE_OPEN;
+    } else {
+      roundId = currentRoundId;
+      locksAtMs = Number(round.locksAt) * 1000;
+      phase = round.phase;
+      if (round.phase === PHASE_OPEN) {
+        seed = resumeOpenRound(this.ctx, round, cfg).seed;
+      } else {
+        console.log(`[roundLoop] resuming round ${roundId} in Drawn phase; skipping to settle`);
+        seed = null;
       }
     }
 
-    this.setState({ phase: "settled", winners });
-    this.emit.settled(roundId, winningTile, winners, prize, share, lastSig);
+    if (phase === PHASE_OPEN) {
+      if (Date.now() < locksAtMs) {
+        await pickingPhase(this.ctx, roundId, locksAtMs);
+      } else {
+        this.setState({ phase: "locked", secondsLeft: 0 });
+      }
+    }
+
+    await drawAndSettle(this.ctx, roundId, cfg.numTiles, seed);
     await sleep(DRAW_SEQUENCE_SEC * 1000);
   }
 }

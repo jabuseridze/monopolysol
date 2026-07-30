@@ -36,6 +36,9 @@ authority-keypair.json
 .env.local
 .env.*.local
 
+# Per-round commit-reveal secret (server/config.ts's roundSecretPath default)
+.round-secret.json
+
 # Logs
 *.log
 npm-debug.log*
