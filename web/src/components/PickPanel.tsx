@@ -10,10 +10,14 @@ export function PickPanel() {
   const { selected } = useSelection();
   const { connected } = useWallet();
 
+  // TODO(Task 7): `selected` is still a tile index (old tile-lottery pick
+  // flow) but `guessCounts` is keyed by dice-sum guess (2-12), not tile
+  // index -- these no longer correspond. Task 7 owns rebuilding this panel
+  // around guess pads instead of tile selection.
   const tile = selected != null ? getTile(selected) : undefined;
-  const backers = selected != null ? round?.pickCounts?.[selected] ?? 0 : 0;
+  const backers = selected != null ? round?.guessCounts?.[selected] ?? 0 : 0;
   const totalPicks = round
-    ? Object.values(round.pickCounts).reduce((a, b) => a + b, 0)
+    ? Object.values(round.guessCounts).reduce((a: number, b: number) => a + b, 0)
     : 0;
 
   return (

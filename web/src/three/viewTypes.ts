@@ -7,11 +7,14 @@ import { RoundPhase } from "@monopoly-sol/shared";
  */
 export interface BoardView {
   phase: RoundPhase;
-  pickCounts: Record<number, number>;
+  /** guessSum (2-12) -> backer count. TODO(Task 7): `Board`/`Tile` currently
+   * index this by tile.index, which no longer matches under the dice-walk
+   * mechanic -- see `GameCanvas.tsx`. */
+  guessCounts: Record<number, number>;
   /** The local player's currently selected tile (null if none). */
   selected: number | null;
-  /** Winning tile once drawn (null while picking). */
-  winningTile: number | null;
+  /** Tile the avatar landed on once drawn (null while picking). */
+  landedTile: number | null;
   /** Timestamp when the draw result arrived, to start the hologram. */
   drawResultAt: number | null;
   /** Whether the cloud layer should be visible. */

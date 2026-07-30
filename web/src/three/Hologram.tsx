@@ -8,7 +8,7 @@ import { placeTile, TILE_HEIGHT } from "./boardMath";
 
 interface Props {
   phase: RoundPhase;
-  winningTile: number | null;
+  landedTile: number | null;
   drawResultAt: number | null;
 }
 
@@ -16,8 +16,13 @@ const SPIN_SECONDS = 6;
 const LAPS = 3;
 const BEAM_Y = 3.2;
 
-/** Yellow holographic scanner: spins across tiles then eases onto the winner. */
-export function Hologram({ phase, winningTile, drawResultAt }: Props) {
+/** Yellow holographic scanner: spins across tiles then eases onto the landed
+ * tile. TODO(Task 7): this is the old tile-lottery draw choreography (a
+ * roulette-style spin-and-land). The server now emits dice values + a start
+ * tile (`DrawResultDTO.diceA/diceB/startTile`) for an actual dice-roll +
+ * avatar-walk animation -- Task 7 likely replaces this component's whole
+ * approach rather than just renaming its prop. */
+export function Hologram({ phase, landedTile, drawResultAt }: Props) {
   const group = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
 
@@ -30,12 +35,12 @@ export function Hologram({ phase, winningTile, drawResultAt }: Props) {
     if (!visible) return;
 
     let index: number;
-    if (winningTile != null && drawResultAt != null) {
+    if (landedTile != null && drawResultAt != null) {
       const elapsed = (Date.now() - drawResultAt) / 1000;
       const p = Math.min(elapsed / SPIN_SECONDS, 1);
       const eased = 1 - Math.pow(1 - p, 3); // decelerate
-      const total = LAPS * NUM_TILES + winningTile;
-      index = p >= 1 ? winningTile : Math.floor(eased * total) % NUM_TILES;
+      const total = LAPS * NUM_TILES + landedTile;
+      index = p >= 1 ? landedTile : Math.floor(eased * total) % NUM_TILES;
     } else {
       // Locked but not yet drawn: idle fast spin.
       index = Math.floor(state.clock.elapsedTime * 9) % NUM_TILES;
@@ -46,7 +51,7 @@ export function Hologram({ phase, winningTile, drawResultAt }: Props) {
     g.position.lerp(new THREE.Vector3(p.x, BEAM_Y, p.z), 0.4);
     if (ring.current) ring.current.rotation.y = state.clock.elapsedTime * 4;
 
-    const landed = winningTile != null && drawResultAt != null && (Date.now() - drawResultAt) / 1000 >= SPIN_SECONDS;
+    const landed = landedTile != null && drawResultAt != null && (Date.now() - drawResultAt) / 1000 >= SPIN_SECONDS;
     const s = landed ? 1.15 + Math.sin(state.clock.elapsedTime * 5) * 0.12 : 1;
     g.scale.setScalar(s);
   });

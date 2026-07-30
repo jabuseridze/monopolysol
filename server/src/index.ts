@@ -2,7 +2,7 @@ import http from "node:http";
 import cors from "cors";
 import express from "express";
 import { Server } from "socket.io";
-import { SOCKET_EVENTS } from "@monopoly-sol/shared";
+import { ClientToServerEvents, ServerToClientEvents, SOCKET_EVENTS } from "@monopoly-sol/shared";
 import { Chain } from "./chain.js";
 import { loadConfig } from "./config.js";
 import { Emitter } from "./emitter.js";
@@ -15,7 +15,9 @@ async function main() {
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
   const server = http.createServer(app);
-  const io = new Server(server, { cors: { origin: cfg.corsOrigins } });
+  const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
+    cors: { origin: cfg.corsOrigins },
+  });
 
   const chain = new Chain(cfg);
 
@@ -25,12 +27,20 @@ async function main() {
       io.emit(SOCKET_EVENTS.tick, { roundId, secondsLeft, phase }),
     drawCue: (roundId, leadSeconds) =>
       io.emit(SOCKET_EVENTS.drawCue, { roundId, leadSeconds }),
-    drawResult: (roundId, winningTile, revealedSeed, commitHash) =>
-      io.emit(SOCKET_EVENTS.drawResult, { roundId, winningTile, revealedSeed, commitHash }),
-    settled: (roundId, winningTile, winners, prizeLamports, shareLamports, txSignature) =>
+    drawResult: (roundId, diceA, diceB, startTile, landedTile, revealedSeed, commitHash) =>
+      io.emit(SOCKET_EVENTS.drawResult, {
+        roundId,
+        diceA,
+        diceB,
+        startTile,
+        landedTile,
+        revealedSeed,
+        commitHash,
+      }),
+    settled: (roundId, landedTile, winners, prizeLamports, shareLamports, txSignature) =>
       io.emit(SOCKET_EVENTS.settled, {
         roundId,
-        winningTile,
+        landedTile,
         winners,
         prizeLamports,
         shareLamports,

@@ -10,15 +10,15 @@ import { Tile } from "./Tile";
 import { tileRegion } from "./board/atlasLayout";
 
 interface Props {
-  pickCounts: Record<number, number>;
+  guessCounts: Record<number, number>;
   selected: number | null;
-  winningTile: number | null;
+  landedTile: number | null;
   phase: RoundPhase;
   onPick: (i: number) => void;
 }
 
 /** Painted board art as one flat surface + per-tile hitboxes for picking. */
-export function Board({ pickCounts, selected, winningTile, phase, onPick }: Props) {
+export function Board({ guessCounts, selected, landedTile, phase, onPick }: Props) {
   const texture = useTexture("/board/board-art.png");
 
   useEffect(() => {
@@ -52,9 +52,12 @@ export function Board({ pickCounts, selected, winningTile, phase, onPick }: Prop
             tile={tile}
             region={tileRegion(tile.index)}
             position={[t.x, 0, t.z]}
-            count={pickCounts[tile.index] ?? 0}
+            // TODO(Task 7): `guessCounts` is keyed by dice-sum guess
+            // (2-12), not tile index -- this display no longer represents
+            // per-tile backer counts under the dice-walk mechanic.
+            count={guessCounts[tile.index] ?? 0}
             selected={selected === tile.index}
-            isWinner={winningTile === tile.index}
+            isWinner={landedTile === tile.index}
             drawing={phase === "drawing"}
             onPick={onPick}
           />

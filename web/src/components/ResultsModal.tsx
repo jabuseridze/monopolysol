@@ -20,7 +20,10 @@ export function ResultsModal() {
 
   if (!open || !settled) return null;
 
-  const tile = getTile(settled.winningTile);
+  // TODO(Task 7): `landedTile` is where the avatar landed, not necessarily a
+  // "winning" tile under the dice-sum mechanic -- this modal's copy/framing
+  // is Task 7's to redesign around the guess-sum win condition.
+  const tile = getTile(settled.landedTile);
   const youWon = publicKey ? settled.winners.includes(publicKey.toBase58()) : false;
   const share = lamportsToSol(settled.shareLamports);
 
@@ -32,7 +35,7 @@ export function ResultsModal() {
           Round #{settled.roundId} result
         </div>
         <div style={{ fontSize: 26, fontWeight: 800, color: "var(--accent)", margin: "6px 0" }}>
-          {tile?.name ?? `Tile ${settled.winningTile}`}
+          {tile?.name ?? `Tile ${settled.landedTile}`}
         </div>
         {settled.winners.length === 0 ? (
           <div style={{ color: "var(--muted)" }}>No winners - prize rolls into the next round.</div>

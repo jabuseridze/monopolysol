@@ -45,9 +45,13 @@ export function GameCanvas() {
     const drawn = phase === "drawing" || phase === "settled";
     return {
       phase,
-      pickCounts: round?.pickCounts ?? {},
+      // TODO(Task 7): `guessCounts` is keyed by dice-sum guess (2-12), not
+      // tile index -- `Board`/`Tile` still index this by tile.index below,
+      // which no longer lines up under the dice-walk mechanic. Left as a
+      // mechanical rename only; Task 7 owns the guess-pad UI rebuild.
+      guessCounts: round?.guessCounts ?? {},
       selected,
-      winningTile: drawn ? round?.winningTile ?? null : null,
+      landedTile: drawn ? round?.landedTile ?? null : null,
       drawResultAt: drawResult?.at ?? null,
       cloudsActive: phase === "locked" || phase === "drawing",
       onPick: (i: number) => {

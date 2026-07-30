@@ -113,10 +113,13 @@ function emptySnapshot(): RoundStateDTO {
     locksAt: 0,
     prizeLamports: 0,
     numTiles: 40,
-    pickCounts: {},
+    guessCounts: {},
     commitHash: null,
-    winningTile: null,
+    avatarTile: 0,
+    landedTile: null,
     revealedSeed: null,
     winners: [],
+    nextPrizeLamports: 0,
+    onlineWallets: 0,
   };
 }

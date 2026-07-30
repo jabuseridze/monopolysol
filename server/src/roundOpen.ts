@@ -32,7 +32,9 @@ export async function openNewRound(
   if (!round) throw new Error(`round ${roundId} account missing after open`);
   const locksAtMs = Number(round.locksAt) * 1000;
 
-  ctx.setState(openSnapshot(roundId, round, cfg.numTiles, toHex(secret.commitHash), ctx.clock.now()));
+  ctx.setState(
+    openSnapshot(roundId, round, cfg.numTiles, cfg.avatarPosition, toHex(secret.commitHash), ctx.clock.now())
+  );
   console.log(`[roundLoop] opened round ${roundId} (prize ${round.prizeLamports} lamports)`);
   return { roundId, locksAtMs, seed: secret.seed };
 }
@@ -54,7 +56,9 @@ export function resumeOpenRound(
   }
   const locksAtMs = Number(round.locksAt) * 1000;
   const nowMs = ctx.clock.now();
-  ctx.setState(openSnapshot(roundId, round, cfg.numTiles, stored.commitHex, nowMs));
+  ctx.setState(
+    openSnapshot(roundId, round, cfg.numTiles, cfg.avatarPosition, stored.commitHex, nowMs)
+  );
   console.log(
     `[roundLoop] resumed round ${roundId} in Open phase, ${Math.max(0, Math.ceil((locksAtMs - nowMs) / 1000))}s left`
   );
@@ -65,6 +69,7 @@ function openSnapshot(
   roundId: number,
   round: RoundData,
   numTiles: number,
+  avatarTile: number,
   commitHex: string,
   nowMs: number
 ): RoundStateDTO {
@@ -76,10 +81,13 @@ function openSnapshot(
     locksAt: locksAtMs,
     prizeLamports: Number(round.prizeLamports),
     numTiles,
-    pickCounts: {}, // TODO(Task 5): rename to guessCounts
+    guessCounts: {},
     commitHash: commitHex,
-    winningTile: null,
+    avatarTile,
+    landedTile: null,
     revealedSeed: null,
     winners: [],
+    nextPrizeLamports: Number(round.nextPrizeLamports),
+    onlineWallets: 0,
   };
 }

@@ -1,20 +1,26 @@
 import { RoundStateDTO } from "@monopoly-sol/shared";
 
 /**
- * Socket.IO broadcast surface the round loop drives. Field names here still
- * say "winningTile" / "pickCounts" to match `shared/src/types.ts`'s current
- * DTOs -- Task 5 owns renaming those (winningTile -> landedTile, pickCounts
- * -> guessCounts) and wiring the socket generics. Don't rename here in
- * isolation; it'd leave Task 5's rename half-done.
+ * Socket.IO broadcast surface the round loop drives. Field names here match
+ * `shared/src/types.ts`'s current DTOs post-Task-5 (`landedTile`,
+ * `guessCounts`, dice-walk fields on `drawResult`).
  */
 export interface Emitter {
   state: (s: RoundStateDTO) => void;
   tick: (roundId: number, secondsLeft: number, phase: RoundStateDTO["phase"]) => void;
   drawCue: (roundId: number, leadSeconds: number) => void;
-  drawResult: (roundId: number, winningTile: number, seedHex: string, commitHex: string) => void;
+  drawResult: (
+    roundId: number,
+    diceA: number,
+    diceB: number,
+    startTile: number,
+    landedTile: number,
+    seedHex: string,
+    commitHex: string
+  ) => void;
   settled: (
     roundId: number,
-    winningTile: number,
+    landedTile: number,
     winners: string[],
     prize: number,
     share: number,

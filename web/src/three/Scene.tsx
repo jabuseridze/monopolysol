@@ -50,9 +50,9 @@ export function Scene({ view }: { view: BoardView }) {
       <World />
       <Suspense fallback={null}>
         <Board
-          pickCounts={view.pickCounts}
+          guessCounts={view.guessCounts}
           selected={view.selected}
-          winningTile={view.winningTile}
+          landedTile={view.landedTile}
           phase={view.phase}
           onPick={view.onPick}
         />
@@ -60,7 +60,7 @@ export function Scene({ view }: { view: BoardView }) {
       <Suspense fallback={null}>
         <Figurines count={5} />
       </Suspense>
-      <Hologram phase={view.phase} winningTile={view.winningTile} drawResultAt={view.drawResultAt} />
+      <Hologram phase={view.phase} landedTile={view.landedTile} drawResultAt={view.drawResultAt} />
       <CloudLayer active={view.cloudsActive} />
 
       <OrbitControls

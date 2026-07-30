@@ -2,29 +2,36 @@
 
 export type RoundPhase =
   | "idle" // no active round
-  | "open" // accepting picks
-  | "locked" // picks closed, awaiting draw
-  | "drawing" // hologram spinning
+  | "open" // accepting guesses
+  | "locked" // guesses closed, awaiting draw
+  | "drawing" // dice roll / avatar walk sequence
   | "settled"; // winners paid
 
 /** Authoritative snapshot broadcast by the coordinator. */
 export interface RoundStateDTO {
   roundId: number;
   phase: RoundPhase;
-  /** Whole seconds until the picking window closes (0 once locked). */
+  /** Whole seconds until the guessing window closes (0 once locked). */
   secondsLeft: number;
-  /** Epoch ms when the picking window closes. */
+  /** Epoch ms when the guessing window closes. */
   locksAt: number;
   prizeLamports: number;
   numTiles: number;
-  /** tileIndex -> number of wallets currently backing it. */
-  pickCounts: Record<number, number>;
-  /** Published before picks open so the draw is verifiable. */
+  /** guessSum (2-12) -> number of wallets currently backing it. */
+  guessCounts: Record<number, number>;
+  /** Published before guesses open so the draw is verifiable. */
   commitHash: string | null;
-  winningTile: number | null;
-  /** Revealed only after the draw so anyone can verify winningTile. */
+  /** Tile the avatar is currently resting on (or landed on, once drawn). */
+  avatarTile: number;
+  /** Tile the avatar landed on this round's draw, once known. */
+  landedTile: number | null;
+  /** Revealed only after the draw so anyone can verify landedTile. */
   revealedSeed: string | null;
   winners: string[];
+  /** Prize armed for the round after this one (may be boosted by an effect tile). */
+  nextPrizeLamports: number;
+  /** Distinct connected wallets right now (spectators excluded). */
+  onlineWallets: number;
 }
 
 /** Per-second lightweight update to avoid resending the full snapshot. */
@@ -40,22 +47,31 @@ export interface DrawCueDTO {
   leadSeconds: number;
 }
 
-/** Tells clients which tile the hologram should land on. */
+/** Tells clients how to animate the dice roll + avatar walk. */
 export interface DrawResultDTO {
   roundId: number;
-  winningTile: number;
+  diceA: number;
+  diceB: number;
+  startTile: number;
+  landedTile: number;
   revealedSeed: string;
   commitHash: string;
 }
 
 export interface SettledDTO {
   roundId: number;
-  winningTile: number;
+  landedTile: number;
   winners: string[];
   prizeLamports: number;
   /** Per-winner share in lamports (0 if no winners -> rolled over). */
   shareLamports: number;
   txSignature: string | null;
+}
+
+/** Live presence broadcast: distinct online wallets + current guess tally. */
+export interface PresenceDTO {
+  onlineWallets: number;
+  guessCounts: Record<number, number>;
 }
 
 /** Strongly-typed map of server -> client Socket.IO events. */
@@ -65,9 +81,10 @@ export interface ServerToClientEvents {
   "round:drawCue": (c: DrawCueDTO) => void;
   "round:drawResult": (r: DrawResultDTO) => void;
   "round:settled": (s: SettledDTO) => void;
+  "presence": (p: PresenceDTO) => void;
 }
 
 export interface ClientToServerEvents {
-  /** Client asks for the current snapshot on connect. */
-  "client:hello": () => void;
+  /** Client announces (or clears) its connected wallet on connect/change. */
+  "client:hello": (walletBase58: string | null) => void;
 }

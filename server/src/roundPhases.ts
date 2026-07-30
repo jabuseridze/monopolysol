@@ -40,7 +40,7 @@ export async function pickingPhase(ctx: LoopCtx, roundId: number, locksAtMs: num
     if (Date.now() - lastRefresh > 4000) {
       lastRefresh = Date.now();
       const { counts } = await ctx.chain.getPicks(roundId);
-      ctx.setState({ pickCounts: counts }); // TODO(Task 5): rename to guessCounts
+      ctx.setState({ guessCounts: counts });
     }
     if (Date.now() - lastClockSync > 10000) {
       lastClockSync = Date.now();
@@ -89,8 +89,22 @@ export async function drawAndSettle(
 
   const seedHex = round.revealedSeed.toString("hex");
   const commitHex = round.commitHash.toString("hex");
-  ctx.setState({ phase: "drawing", winningTile: round.landedTile, revealedSeed: seedHex });
-  ctx.emit.drawResult(roundId, round.landedTile, seedHex, commitHex);
+  ctx.setState({
+    phase: "drawing",
+    landedTile: round.landedTile,
+    avatarTile: round.landedTile,
+    revealedSeed: seedHex,
+    nextPrizeLamports: Number(round.nextPrizeLamports),
+  });
+  ctx.emit.drawResult(
+    roundId,
+    round.diceA,
+    round.diceB,
+    round.startTile,
+    round.landedTile,
+    seedHex,
+    commitHex
+  );
 
   const winningSum = round.diceA + round.diceB;
   const { byGuess } = await ctx.chain.getPicks(roundId);
