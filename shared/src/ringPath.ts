@@ -59,18 +59,14 @@ function walkPointStep(startTile: number, steps: number, t: number): RingPoint {
     return positionAt(startTile);
   }
 
-  // Which step are we on? (0-indexed)
-  const currentStep = Math.floor(t);
-  // Fractional part within the current step [0, 1)
-  const stepFraction = t - currentStep;
-
-  // Clamp to valid steps
-  const step = Math.min(currentStep, steps - 1);
-  const nextStep = Math.min(step + 1, steps);
+  // Which step are we on? (0-indexed), clamped to valid range
+  const clampedStep = Math.max(0, Math.min(Math.floor(t), steps - 1));
+  // Fractional part within the step [0, 1), computed from clamped step so it's correct at boundaries
+  const stepFraction = t - clampedStep;
 
   // Tiles: current and target for this step
-  const fromTile = (startTile + step) % NUM_TILES;
-  const toTile = (startTile + nextStep) % NUM_TILES;
+  const fromTile = (startTile + clampedStep) % NUM_TILES;
+  const toTile = (startTile + clampedStep + 1) % NUM_TILES;
 
   const fromPos = positionAt(fromTile);
   const toPos = positionAt(toTile);

@@ -40,15 +40,16 @@ export const GUESS_MAX = 12;
  * Everything else stacks the GO bonus when applicable.
  *
  * @param landedTile - The tile index the avatar landed on
- * @param baseOrCurrentPrize - The base prize (or current round's prize if re-arming)
  * @param passedOrLandedGo - Whether the avatar passed or landed on GO
  * @returns The prize in lamports for the next round
  */
-export function nextPrizeForLanding(
-  landedTile: number,
-  baseOrCurrentPrize: number,
-  passedOrLandedGo: boolean,
-): number {
+export function nextPrizeForLanding({
+  landedTile,
+  passedOrLandedGo,
+}: {
+  landedTile: number;
+  passedOrLandedGo: boolean;
+}): number {
   const goBonus = passedOrLandedGo ? GO_BONUS_LAMPORTS : 0;
 
   if (PENALTY_TILES.has(landedTile)) {

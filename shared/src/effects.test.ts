@@ -34,25 +34,25 @@ describe("effects", () => {
     // Penalty tiles (suppress GO bonus)
     describe("penalty tiles (Gas Fee #4, Slippage Tax #38)", () => {
       it("should return 0.25 SOL for Gas Fee (tile 4) without GO bonus", () => {
-        expect(nextPrizeForLanding(4, BASE_PRIZE_LAMPORTS, false)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 4, passedOrLandedGo: false })).toBe(
           PENALTY_PRIZE_LAMPORTS,
         );
       });
 
       it("should return 0.25 SOL for Gas Fee (tile 4) even with GO bonus", () => {
-        expect(nextPrizeForLanding(4, BASE_PRIZE_LAMPORTS, true)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 4, passedOrLandedGo: true })).toBe(
           PENALTY_PRIZE_LAMPORTS,
         );
       });
 
       it("should return 0.25 SOL for Slippage Tax (tile 38) without GO bonus", () => {
-        expect(nextPrizeForLanding(38, BASE_PRIZE_LAMPORTS, false)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 38, passedOrLandedGo: false })).toBe(
           PENALTY_PRIZE_LAMPORTS,
         );
       });
 
       it("should return 0.25 SOL for Slippage Tax (tile 38) even with GO bonus", () => {
-        expect(nextPrizeForLanding(38, BASE_PRIZE_LAMPORTS, true)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 38, passedOrLandedGo: true })).toBe(
           PENALTY_PRIZE_LAMPORTS,
         );
       });
@@ -61,13 +61,13 @@ describe("effects", () => {
     // Rug tile (suppress GO bonus)
     describe("rug tile (Get Rugged #30)", () => {
       it("should return 0.1 SOL without GO bonus", () => {
-        expect(nextPrizeForLanding(30, BASE_PRIZE_LAMPORTS, false)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 30, passedOrLandedGo: false })).toBe(
           RUG_PRIZE_LAMPORTS,
         );
       });
 
       it("should return 0.1 SOL even with GO bonus", () => {
-        expect(nextPrizeForLanding(30, BASE_PRIZE_LAMPORTS, true)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 30, passedOrLandedGo: true })).toBe(
           RUG_PRIZE_LAMPORTS,
         );
       });
@@ -76,37 +76,37 @@ describe("effects", () => {
     // Pump tiles (stack GO bonus)
     describe("pump tiles (Random Pump #7, #22, #36)", () => {
       it("should return 1.0 SOL for Random Pump #7 without GO bonus", () => {
-        expect(nextPrizeForLanding(7, BASE_PRIZE_LAMPORTS, false)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 7, passedOrLandedGo: false })).toBe(
           PUMP_PRIZE_LAMPORTS,
         );
       });
 
       it("should return 1.1 SOL for Random Pump #7 with GO bonus", () => {
-        expect(nextPrizeForLanding(7, BASE_PRIZE_LAMPORTS, true)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 7, passedOrLandedGo: true })).toBe(
           PUMP_PRIZE_LAMPORTS + GO_BONUS_LAMPORTS,
         );
       });
 
       it("should return 1.0 SOL for Random Pump #22 without GO bonus", () => {
-        expect(nextPrizeForLanding(22, BASE_PRIZE_LAMPORTS, false)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 22, passedOrLandedGo: false })).toBe(
           PUMP_PRIZE_LAMPORTS,
         );
       });
 
       it("should return 1.1 SOL for Random Pump #22 with GO bonus", () => {
-        expect(nextPrizeForLanding(22, BASE_PRIZE_LAMPORTS, true)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 22, passedOrLandedGo: true })).toBe(
           PUMP_PRIZE_LAMPORTS + GO_BONUS_LAMPORTS,
         );
       });
 
       it("should return 1.0 SOL for Random Pump #36 without GO bonus", () => {
-        expect(nextPrizeForLanding(36, BASE_PRIZE_LAMPORTS, false)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 36, passedOrLandedGo: false })).toBe(
           PUMP_PRIZE_LAMPORTS,
         );
       });
 
       it("should return 1.1 SOL for Random Pump #36 with GO bonus", () => {
-        expect(nextPrizeForLanding(36, BASE_PRIZE_LAMPORTS, true)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 36, passedOrLandedGo: true })).toBe(
           PUMP_PRIZE_LAMPORTS + GO_BONUS_LAMPORTS,
         );
       });
@@ -115,44 +115,44 @@ describe("effects", () => {
     // All other tiles (stack GO bonus)
     describe("all other tiles (base + optional GO bonus)", () => {
       it("should return 0.5 SOL for GO (tile 0) without GO bonus", () => {
-        expect(nextPrizeForLanding(0, BASE_PRIZE_LAMPORTS, false)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 0, passedOrLandedGo: false })).toBe(
           BASE_PRIZE_LAMPORTS,
         );
       });
 
       it("should return 0.6 SOL for GO (tile 0) with GO bonus", () => {
-        expect(nextPrizeForLanding(0, BASE_PRIZE_LAMPORTS, true)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 0, passedOrLandedGo: true })).toBe(
           BASE_PRIZE_LAMPORTS + GO_BONUS_LAMPORTS,
         );
       });
 
       it("should return 0.5 SOL for Testnet Alley (tile 1) without GO bonus", () => {
-        expect(nextPrizeForLanding(1, BASE_PRIZE_LAMPORTS, false)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 1, passedOrLandedGo: false })).toBe(
           BASE_PRIZE_LAMPORTS,
         );
       });
 
       it("should return 0.6 SOL for Testnet Alley (tile 1) with GO bonus", () => {
-        expect(nextPrizeForLanding(1, BASE_PRIZE_LAMPORTS, true)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 1, passedOrLandedGo: true })).toBe(
           BASE_PRIZE_LAMPORTS + GO_BONUS_LAMPORTS,
         );
       });
 
       // Spot check a few more tiles to ensure the pattern holds
       it("should stack GO bonus for Airdrop Crate (tile 2)", () => {
-        expect(nextPrizeForLanding(2, BASE_PRIZE_LAMPORTS, false)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 2, passedOrLandedGo: false })).toBe(
           BASE_PRIZE_LAMPORTS,
         );
-        expect(nextPrizeForLanding(2, BASE_PRIZE_LAMPORTS, true)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 2, passedOrLandedGo: true })).toBe(
           BASE_PRIZE_LAMPORTS + GO_BONUS_LAMPORTS,
         );
       });
 
       it("should stack GO bonus for Ape Avenue (tile 6)", () => {
-        expect(nextPrizeForLanding(6, BASE_PRIZE_LAMPORTS, false)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 6, passedOrLandedGo: false })).toBe(
           BASE_PRIZE_LAMPORTS,
         );
-        expect(nextPrizeForLanding(6, BASE_PRIZE_LAMPORTS, true)).toBe(
+        expect(nextPrizeForLanding({ landedTile: 6, passedOrLandedGo: true })).toBe(
           BASE_PRIZE_LAMPORTS + GO_BONUS_LAMPORTS,
         );
       });
@@ -225,11 +225,11 @@ describe("effects", () => {
     it("should produce correct prizes for all 40 tiles", () => {
       for (const { tile, noGo, withGo } of expectedPrizes) {
         expect(
-          nextPrizeForLanding(tile, BASE_PRIZE_LAMPORTS, false),
+          nextPrizeForLanding({ landedTile: tile, passedOrLandedGo: false }),
           `tile ${tile} without GO bonus`,
         ).toBe(noGo);
         expect(
-          nextPrizeForLanding(tile, BASE_PRIZE_LAMPORTS, true),
+          nextPrizeForLanding({ landedTile: tile, passedOrLandedGo: true }),
           `tile ${tile} with GO bonus`,
         ).toBe(withGo);
       }
@@ -239,8 +239,8 @@ describe("effects", () => {
   describe("special effect tile groups", () => {
     // Report the specific next-prize values for the 5 special groups
     it("should report Gas Fee / Slippage Tax group prizes", () => {
-      const tile4 = nextPrizeForLanding(4, BASE_PRIZE_LAMPORTS, false);
-      const tile38 = nextPrizeForLanding(38, BASE_PRIZE_LAMPORTS, false);
+      const tile4 = nextPrizeForLanding({ landedTile: 4, passedOrLandedGo: false });
+      const tile38 = nextPrizeForLanding({ landedTile: 38, passedOrLandedGo: false });
       expect(tile4).toBe(PENALTY_PRIZE_LAMPORTS);
       expect(tile38).toBe(PENALTY_PRIZE_LAMPORTS);
       console.log(
@@ -249,7 +249,7 @@ describe("effects", () => {
     });
 
     it("should report Get Rugged group prize", () => {
-      const tile30 = nextPrizeForLanding(30, BASE_PRIZE_LAMPORTS, false);
+      const tile30 = nextPrizeForLanding({ landedTile: 30, passedOrLandedGo: false });
       expect(tile30).toBe(RUG_PRIZE_LAMPORTS);
       console.log(
         `Get Rugged next-prize: ${tile30 / 1_000_000_000} SOL (100M lamports)`,
@@ -257,12 +257,12 @@ describe("effects", () => {
     });
 
     it("should report Random Pump group prizes (with and without GO)", () => {
-      const tile7NoGo = nextPrizeForLanding(7, BASE_PRIZE_LAMPORTS, false);
-      const tile7WithGo = nextPrizeForLanding(7, BASE_PRIZE_LAMPORTS, true);
-      const tile22NoGo = nextPrizeForLanding(22, BASE_PRIZE_LAMPORTS, false);
-      const tile22WithGo = nextPrizeForLanding(22, BASE_PRIZE_LAMPORTS, true);
-      const tile36NoGo = nextPrizeForLanding(36, BASE_PRIZE_LAMPORTS, false);
-      const tile36WithGo = nextPrizeForLanding(36, BASE_PRIZE_LAMPORTS, true);
+      const tile7NoGo = nextPrizeForLanding({ landedTile: 7, passedOrLandedGo: false });
+      const tile7WithGo = nextPrizeForLanding({ landedTile: 7, passedOrLandedGo: true });
+      const tile22NoGo = nextPrizeForLanding({ landedTile: 22, passedOrLandedGo: false });
+      const tile22WithGo = nextPrizeForLanding({ landedTile: 22, passedOrLandedGo: true });
+      const tile36NoGo = nextPrizeForLanding({ landedTile: 36, passedOrLandedGo: false });
+      const tile36WithGo = nextPrizeForLanding({ landedTile: 36, passedOrLandedGo: true });
 
       expect(tile7NoGo).toBe(PUMP_PRIZE_LAMPORTS);
       expect(tile7WithGo).toBe(PUMP_PRIZE_LAMPORTS + GO_BONUS_LAMPORTS);
@@ -280,8 +280,8 @@ describe("effects", () => {
     });
 
     it("should report base/plain tile group prizes (with and without GO)", () => {
-      const plainNoGo = nextPrizeForLanding(1, BASE_PRIZE_LAMPORTS, false);
-      const plainWithGo = nextPrizeForLanding(1, BASE_PRIZE_LAMPORTS, true);
+      const plainNoGo = nextPrizeForLanding({ landedTile: 1, passedOrLandedGo: false });
+      const plainWithGo = nextPrizeForLanding({ landedTile: 1, passedOrLandedGo: true });
 
       expect(plainNoGo).toBe(BASE_PRIZE_LAMPORTS);
       expect(plainWithGo).toBe(BASE_PRIZE_LAMPORTS + GO_BONUS_LAMPORTS);
@@ -330,7 +330,10 @@ describe("effects", () => {
       expect(result.passedOrLandedGo).toBe(true);
 
       // Verify it only gets one GO bonus via nextPrizeForLanding
-      const prize = nextPrizeForLanding(result.landedTile, BASE_PRIZE_LAMPORTS, result.passedOrLandedGo);
+      const prize = nextPrizeForLanding({
+        landedTile: result.landedTile,
+        passedOrLandedGo: result.passedOrLandedGo,
+      });
       // Landing on GO (tile 0) without passing it would be BASE, with passing would be BASE + GO_BONUS
       expect(prize).toBe(BASE_PRIZE_LAMPORTS + GO_BONUS_LAMPORTS);
     });
