@@ -3,71 +3,116 @@
 import { useMemo, useRef, type RefObject } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { DICE_TUMBLE_MS } from "@monopoly-sol/shared";
+import {
+  BEAT_ROLL_AT_MS,
+  BEAT_SETTLE_AT_MS,
+  DIE_A_LOCK_MS,
+  DIE_B_LOCK_MS,
+} from "@monopoly-sol/shared";
 import { dieFaceMaterials, landingQuaternion } from "./dicePips";
+import { TILE_HEIGHT } from "./boardMath";
 
 export interface DiceValues {
   a: number;
   b: number;
-  /** Epoch ms the tumble started, timed the same way `Hologram.tsx` drives
-   * its spin: `(Date.now() - at) / 1000` against `DICE_TUMBLE_MS`. */
-  at: number;
 }
 
 interface Props {
   dice: DiceValues | null;
-  /** World (x, z) to hover the dice above -- the avatar's tile at roll time. */
-  origin: { x: number; z: number };
+  /** Master choreography clock -- `drawResult.at`. All beat offsets come
+   * from `shared/src/constants.ts`, so the dice can't drift from the camera. */
+  drawResultAt: number | null;
 }
 
-const SIZE = 0.5;
-const GAP = 0.65;
-const HOVER_Y = 1.7;
-const DROP_HEIGHT = 2.5; // extra height at tumble start, eases down to HOVER_Y
-const SPIN_TURNS = 4; // full rotations burned off over the tumble
+/** ~3x the old 0.5, and rolled at the board's centre rather than hovering
+ * over a corner tile. The inner playfield is a clear 13.95 square and the
+ * airspace above it is empty, so there's room for dice this size. */
+const SIZE = 1.45;
+const GAP = 2.1;
+const DROP_FROM = 12; // starts high above the board and falls in
+const REST_Y = TILE_HEIGHT + SIZE / 2;
+const SPIN_TURNS = 7;
+const BOUNCES = 3;
+const BOUNCE_DECAY = 0.42;
 
 /**
- * Two procedurally-built cubes (no sourced dice model/texture) that tumble
- * on a random axis, decelerate, and snap exactly to the server-committed
- * `diceA`/`diceB` -- `landingQuaternion` guarantees the final orientation is
- * exact, not merely "looks random."
+ * Two procedurally-built cubes (never a sourced model -- we need to own the
+ * face-to-rotation mapping so they land on the exact committed values).
+ *
+ * Beats: nothing until the roll begins, then a falling multi-bounce tumble,
+ * then each die locks *separately* -- die A first, die B ~0.7s later. That
+ * gap is the whole point: it's the held-breath moment before the sum is
+ * known. Once locked, a die is perfectly still.
  */
-export function Dice({ dice, origin }: Props) {
+export function Dice({ dice, drawResultAt }: Props) {
   const groupA = useRef<THREE.Group>(null);
   const groupB = useRef<THREE.Group>(null);
   const materials = useMemo(() => dieFaceMaterials(), []);
-  const axisA = useMemo(() => randomAxis(), [dice?.at]);
-  const axisB = useMemo(() => randomAxis(), [dice?.at]);
+  const axisA = useMemo(() => randomAxis(), [drawResultAt]);
+  const axisB = useMemo(() => randomAxis(), [drawResultAt]);
 
   useFrame(() => {
-    if (!dice) return;
-    const p = Math.min((Date.now() - dice.at) / DICE_TUMBLE_MS, 1);
-    const eased = 1 - Math.pow(1 - p, 3); // decelerate, matches Hologram.tsx
-    placeDie(groupA.current, dice.a, eased, axisA, origin.x - GAP / 2, origin.z);
-    placeDie(groupB.current, dice.b, eased, axisB, origin.x + GAP / 2, origin.z);
+    if (!dice || drawResultAt == null) return;
+    const t = Date.now() - drawResultAt;
+    placeDie(groupA.current, dice.a, t, BEAT_SETTLE_AT_MS + DIE_A_LOCK_MS, axisA, -GAP / 2);
+    placeDie(groupB.current, dice.b, t, BEAT_SETTLE_AT_MS + DIE_B_LOCK_MS, axisB, +GAP / 2);
   });
 
+  const visible = dice != null && drawResultAt != null;
   return (
-    <group visible={dice != null}>
+    <group visible={visible}>
       <Die groupRef={groupA} materials={materials} />
       <Die groupRef={groupB} materials={materials} />
     </group>
   );
 }
 
+/**
+ * `t` and `lockAt` are ms from `drawResultAt`. Before the roll beat the die
+ * waits offscreen above; between roll and lock it falls and tumbles; after
+ * `lockAt` it is exactly at rest showing `value`.
+ */
 function placeDie(
   group: THREE.Group | null,
   value: number,
-  eased: number,
+  t: number,
+  lockAt: number,
   axis: THREE.Vector3,
   x: number,
-  z: number,
 ): void {
   if (!group) return;
-  const spinAngle = (1 - eased) * SPIN_TURNS * Math.PI * 2;
-  const spin = new THREE.Quaternion().setFromAxisAngle(axis, spinAngle);
-  group.quaternion.copy(spin.multiply(landingQuaternion(value)));
-  group.position.set(x, HOVER_Y + (1 - eased) * DROP_HEIGHT, z);
+
+  const landed = landingQuaternion(value);
+
+  if (t <= BEAT_ROLL_AT_MS) {
+    group.position.set(x, DROP_FROM, 0);
+    group.quaternion.copy(landed);
+    return;
+  }
+  if (t >= lockAt) {
+    group.position.set(x, REST_Y, 0);
+    group.quaternion.copy(landed);
+    return;
+  }
+
+  const p = (t - BEAT_ROLL_AT_MS) / (lockAt - BEAT_ROLL_AT_MS);
+
+  // Spin decays to zero exactly at the lock, so the snap is seamless.
+  const spinAngle = (1 - p) * (1 - p) * SPIN_TURNS * Math.PI * 2;
+  group.quaternion.copy(new THREE.Quaternion().setFromAxisAngle(axis, spinAngle).multiply(landed));
+
+  group.position.set(x, REST_Y + bounceHeight(p) * (DROP_FROM - REST_Y), 0);
+}
+
+/**
+ * Parametric bounce, no physics engine: an |sin| arc whose peaks decay
+ * geometrically, so the die drops, hits, and rebounds progressively lower
+ * until it's flat at p = 1.
+ */
+function bounceHeight(p: number): number {
+  const envelope = Math.pow(1 - p, 1.55);
+  const arc = Math.abs(Math.cos(p * Math.PI * (BOUNCES + 0.5)));
+  return envelope * (BOUNCE_DECAY + (1 - BOUNCE_DECAY) * arc);
 }
 
 function randomAxis(): THREE.Vector3 {

@@ -1,4 +1,4 @@
-import { DRAW_SEQUENCE_SEC, RoundStateDTO } from "@monopoly-sol/shared";
+import { DRAW_SEQUENCE_BUFFER_MS, drawSequenceDurationMs, RoundStateDTO } from "@monopoly-sol/shared";
 import { PHASE_OPEN, PHASE_SETTLED } from "./anchorCodec.js";
 import { Chain } from "./chain.js";
 import { ClusterClock } from "./clusterClock.js";
@@ -100,8 +100,15 @@ export class RoundLoop {
       }
     }
 
-    await drawAndSettle(this.ctx, roundId, cfg.numTiles, seed);
-    await sleep(DRAW_SEQUENCE_SEC * 1000);
+    const { diceSum, drawResultAt } = await drawAndSettle(this.ctx, roundId, cfg.numTiles, seed);
+    // Sleep measured from `drawResultAt` (when the client's choreography
+    // clock starts), not a flat delay tacked on after settle/payout -- the
+    // client's draw sequence is dynamic-length (a 12-step walk takes longer
+    // than a 2-step one), and settle/payout latency itself is variable. This
+    // is what keeps the next round from ever opening mid-celebration
+    // regardless of either source of variance.
+    const readyAt = drawResultAt + drawSequenceDurationMs(diceSum) + DRAW_SEQUENCE_BUFFER_MS;
+    await sleep(Math.max(0, readyAt - Date.now()));
   }
 }
 

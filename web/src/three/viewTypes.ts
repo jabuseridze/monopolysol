@@ -9,12 +9,16 @@ export interface BoardView {
   phase: RoundPhase;
   /** Tile the avatar is currently resting on (or has landed on, once drawn). */
   avatarTile: number;
+  /** Epoch ms the coordinator revealed this round's dice. The master clock
+   * for the whole draw choreography -- every beat offset in
+   * `shared/src/constants.ts` is measured from here. Null outside a draw. */
+  drawResultAt: number | null;
   /** Present only once this round's draw has happened: drives the avatar's
-   * walk from `startTile` by `steps` tiles, timed off `at` (epoch ms). */
-  walk: { startTile: number; steps: number; at: number } | null;
-  /** Present only once this round's draw has happened: the committed dice
-   * faces + when they were revealed, timed off `at` (epoch ms). */
-  dice: { a: number; b: number; at: number } | null;
+   * walk from `startTile` by `steps` tiles. Timing comes from
+   * `drawResultAt` + the shared beat constants, not a separate stamp. */
+  walk: { startTile: number; steps: number } | null;
+  /** The committed dice faces, once revealed. */
+  dice: { a: number; b: number } | null;
   /** Tile the avatar landed on once drawn (null while picking). */
   landedTile: number | null;
   /** guessSum (2-12) -> number of wallets currently backing it. */
@@ -25,7 +29,9 @@ export interface BoardView {
   winningSum: number | null;
   /** True once guessing has closed for this round. */
   disabled: boolean;
-  /** Whether the cloud layer should be visible. */
-  cloudsActive: boolean;
+  /** True once the local wallet is known to be among this round's winners.
+   * The 3D scene had no knowledge of who won at all before this -- the
+   * celebration beat needs it to know whether to play the extra flourish. */
+  youWon: boolean;
   onGuess: (sum: number) => void;
 }

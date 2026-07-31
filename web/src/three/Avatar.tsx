@@ -3,9 +3,8 @@
 import { useEffect, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { WALK_STEP_MS } from "@monopoly-sol/shared";
+import { BEAT_WALK_AT_MS, WALK_STEP_MS } from "@monopoly-sol/shared";
 import { walkPoint } from "@monopoly-sol/shared/ringPath";
-import { isCheerLanding } from "@monopoly-sol/shared/effects";
 import { placeTile, TILE_HEIGHT } from "./boardMath";
 import { useKayKitModel } from "./useKayKitModel";
 
@@ -30,9 +29,6 @@ const FADE_SEC = 0.25;
 export interface AvatarWalk {
   startTile: number;
   steps: number;
-  /** Epoch ms the walk started -- driven the same way `Hologram.tsx` drives
-   * its spin, off `(Date.now() - at) / 1000` against a known duration. */
-  at: number;
 }
 
 interface Props {
@@ -40,8 +36,15 @@ interface Props {
    * since the server advances this the moment a round enters "drawing"). */
   avatarTile: number;
   walk: AvatarWalk | null;
+  /** Master choreography clock -- `drawResult.at`. The walk beat starts at
+   * `BEAT_WALK_AT_MS` past it, after the dice have rolled and settled. */
+  drawResultAt: number | null;
   landedTile: number | null;
 }
+
+/** Height of the per-step hop arc. The walk used to be a flat lerp between
+ * tile centres, which read as gliding; a small hop gives each step weight. */
+const HOP_HEIGHT = 0.22;
 
 type AnimState = "idle" | "walking" | "cheer";
 
@@ -49,9 +52,10 @@ type AnimState = "idle" | "walking" | "cheer";
  * `walk.startTile` by `walk.steps` tiles, converging via `lerp` rather than
  * snapping so a stuttering or late-joining client catches up smoothly. Once
  * the walk's time budget elapses it snaps exactly to the server-provided
- * `landedTile` (never recomputed locally) and crossfades to Idle, or to a
- * one-shot Cheer on a Random Pump tile or GO. */
-export function Avatar({ avatarTile, walk, landedTile }: Props) {
+ * `landedTile` (never recomputed locally) and celebrates with a one-shot
+ * Cheer -- on *every* landing, since the landing is the payoff moment of the
+ * round regardless of which tile it happens to be. */
+export function Avatar({ avatarTile, walk, drawResultAt, landedTile }: Props) {
   const root = useRef<THREE.Group>(null);
   const { scene, actions, names } = useKayKitModel(AVATAR_MODEL_URL);
   const stateRef = useRef<AnimState>("idle");
@@ -86,34 +90,43 @@ export function Avatar({ avatarTile, walk, landedTile }: Props) {
     const g = root.current;
     if (!g) return;
 
+    // The walk is one beat of the draw choreography, starting once the dice
+    // have rolled and settled -- all offsets from the one master clock.
+    const walkAt = drawResultAt != null ? drawResultAt + BEAT_WALK_AT_MS : null;
     const totalMs = walk ? walk.steps * WALK_STEP_MS : 0;
     const now = Date.now();
-    const walking = walk != null && now - walk.at < totalMs;
+    const elapsed = walkAt != null ? now - walkAt : -1;
+    const walking = walk != null && elapsed >= 0 && elapsed < totalMs;
 
     if (walking && walk) {
-      const elapsedSteps = (now - walk.at) / WALK_STEP_MS;
+      const elapsedSteps = elapsed / WALK_STEP_MS;
       const p = walkPoint(walk.startTile, walk.steps, elapsedSteps);
       if (stateRef.current !== "walking") {
         stateRef.current = "walking";
         crossfadeTo(CLIP_WALK, false);
       }
-      g.position.lerp(new THREE.Vector3(p.x, GROUND_Y, p.z), 0.4);
+      // Hop arc within each step: a half-sine that returns to zero exactly
+      // on every footfall, so the avatar never floats between tiles.
+      const hop = Math.sin((elapsedSteps % 1) * Math.PI) * HOP_HEIGHT;
+      g.position.lerp(new THREE.Vector3(p.x, GROUND_Y + hop, p.z), 0.4);
       g.rotation.y = p.heading;
       return;
     }
 
-    // Between rounds, or the walk's time budget just elapsed: rest exactly
-    // on the server's tile (never local modular arithmetic), so a stuttering
-    // client or a page refresh self-heals on the next broadcast.
-    const restTile = walk != null ? landedTile ?? avatarTile : avatarTile;
+    // Before the walk beat, between rounds, or once the walk's budget has
+    // elapsed: rest exactly on the server's tile (never local modular
+    // arithmetic), so a stuttering client or refresh self-heals.
+    const preWalk = walk != null && elapsed < 0;
+    const restTile = preWalk ? walk!.startTile : walk != null ? landedTile ?? avatarTile : avatarTile;
     const rest = placeTile(restTile);
     g.position.set(rest.x, GROUND_Y, rest.z);
 
-    if (walk != null && handledWalkAt.current !== walk.at) {
-      handledWalkAt.current = walk.at;
-      const cheer = landedTile != null && isCheerLanding(landedTile);
-      stateRef.current = cheer ? "cheer" : "idle";
-      crossfadeTo(cheer ? CLIP_CHEER : CLIP_IDLE, cheer);
+    if (walk != null && !preWalk && walkAt != null && handledWalkAt.current !== walkAt) {
+      handledWalkAt.current = walkAt;
+      // Cheer on every landing -- it's the payoff moment of the round no
+      // matter which tile it happens to be, not just the 4 effect tiles.
+      stateRef.current = "cheer";
+      crossfadeTo(CLIP_CHEER, true);
     } else if (stateRef.current === "cheer" && !actions[CLIP_CHEER]?.isRunning()) {
       stateRef.current = "idle";
       crossfadeTo(CLIP_IDLE, false);

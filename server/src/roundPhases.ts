@@ -51,6 +51,14 @@ export async function pickingPhase(ctx: LoopCtx, roundId: number, locksAtMs: num
   ctx.setState({ phase: "locked", secondsLeft: 0 });
 }
 
+/** Dice sum + the wall-clock moment `drawResult` was emitted -- the caller
+ * (`roundLoop.ts`) uses both to size the post-draw sleep so the next round
+ * never opens mid-celebration, however long this round's payout loop took. */
+export interface DrawOutcome {
+  diceSum: number;
+  drawResultAt: number;
+}
+
 /**
  * Reveal (if not already revealed), cross-check the chain's dice/landing
  * against a local recomputation, settle, and pay out winners. `seed` is
@@ -62,7 +70,7 @@ export async function drawAndSettle(
   roundId: number,
   numTiles: number,
   seed: Buffer | null
-): Promise<void> {
+): Promise<DrawOutcome> {
   let round = await ctx.chain.getRound(roundId);
   if (!round) throw new Error(`round ${roundId} missing before reveal`);
 
@@ -96,6 +104,7 @@ export async function drawAndSettle(
     revealedSeed: seedHex,
     nextPrizeLamports: Number(round.nextPrizeLamports),
   });
+  const drawResultAt = Date.now();
   ctx.emit.drawResult(
     roundId,
     round.diceA,
@@ -132,6 +141,8 @@ export async function drawAndSettle(
   );
   ctx.setState({ phase: "settled", winners: winnerStrs });
   ctx.emit.settled(roundId, round.landedTile, winnerStrs, prize, share, lastSig);
+
+  return { diceSum: winningSum, drawResultAt };
 }
 
 /** Turns a would-be silent treasury-overpay (wrong winner bucket) into a loud

@@ -2,7 +2,6 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
-import { DICE_TUMBLE_MS } from "@monopoly-sol/shared";
 import { useGame } from "@/hooks/useGame";
 import { useSubmitGuess } from "@/hooks/useSubmitGuess";
 import { useSelection } from "@/hooks/useSelection";
@@ -52,72 +51,32 @@ export function GameCanvas() {
     return {
       phase,
       avatarTile: round?.avatarTile ?? 0,
-      // The walk starts only once the dice tumble finishes -- dice roll,
-      // then the avatar walks that many tiles -- not simultaneously.
+      // One master clock for the whole choreography: every beat offset lives
+      // in shared/src/constants.ts and is measured from here, so the camera,
+      // dice, avatar and effects can never drift apart.
+      drawResultAt: drawnForRound ? drawResult!.at : null,
       walk: drawnForRound
-        ? {
-            startTile: drawResult!.startTile,
-            steps: drawResult!.diceA + drawResult!.diceB,
-            at: drawResult!.at + DICE_TUMBLE_MS,
-          }
+        ? { startTile: drawResult!.startTile, steps: drawResult!.diceA + drawResult!.diceB }
         : null,
-      dice: drawnForRound ? { a: drawResult!.diceA, b: drawResult!.diceB, at: drawResult!.at } : null,
+      dice: drawnForRound ? { a: drawResult!.diceA, b: drawResult!.diceB } : null,
       landedTile: drawn ? round?.landedTile ?? null : null,
       guessCounts: round?.guessCounts ?? {},
       selectedSum,
       winningSum: drawnForRound ? drawResult!.diceA + drawResult!.diceB : null,
       disabled: phase !== "open",
-      cloudsActive: phase === "locked" || phase === "drawing",
+      youWon:
+        settled != null &&
+        round != null &&
+        settled.roundId === round.roundId &&
+        publicKey != null &&
+        settled.winners.includes(publicKey.toBase58()),
       onGuess: (sum: number) => {
         audio.unlock();
         setSelectedSum(sum);
         submitGuess(sum);
       },
     };
-  }, [round, selectedSum, drawResult, submitGuess]);
+  }, [round, selectedSum, drawResult, settled, publicKey, submitGuess]);
 
-  // TEMP-SCREENSHOT-DEBUG: remove before commit.
-  const debugView = buildDebugView(view);
-  return <Scene view={debugView ?? view} />;
-}
-
-function buildDebugView(base: BoardView): BoardView | null {
-  if (typeof window === "undefined") return null;
-  const mode = new URLSearchParams(window.location.search).get("debug");
-  if (!mode) return null;
-  const now = Date.now();
-  if (mode === "pads") {
-    return {
-      ...base,
-      phase: "open",
-      avatarTile: 5,
-      guessCounts: { 5: 2, 7: 4, 9: 1, 12: 1 },
-      selectedSum: 8,
-      winningSum: null,
-      disabled: false,
-    };
-  }
-  if (mode === "dice") {
-    return {
-      ...base,
-      phase: "drawing",
-      avatarTile: 5,
-      dice: { a: 3, b: 4, at: now - 600 },
-      walk: null,
-      landedTile: null,
-      winningSum: 7,
-    };
-  }
-  if (mode === "walk") {
-    return {
-      ...base,
-      phase: "drawing",
-      avatarTile: 12,
-      dice: { a: 3, b: 4, at: now - 3000 },
-      walk: { startTile: 5, steps: 7, at: now - 900 },
-      landedTile: 12,
-      winningSum: 7,
-    };
-  }
-  return null;
+  return <Scene view={view} />;
 }

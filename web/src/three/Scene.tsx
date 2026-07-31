@@ -3,31 +3,43 @@
 import { Suspense } from "react";
 import { Canvas } from "@react-three/fiber";
 import { Environment, Lightformer, OrbitControls, SoftShadows } from "@react-three/drei";
-import { Bloom, EffectComposer, N8AO, SMAA } from "@react-three/postprocessing";
+import { Bloom, EffectComposer, N8AO, SMAA, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
-import { WALK_STEP_MS } from "@monopoly-sol/shared";
+import { BEAT_WALK_AT_MS, walkDurationMs } from "@monopoly-sol/shared";
 import { Avatar } from "./Avatar";
 import { Board } from "./Board";
+import { CinematicCamera } from "./CinematicCamera";
+import { CoinBurst } from "./CoinBurst";
 import { Dice } from "./Dice";
 import { Figurines } from "./Figurines";
 import { GuessPads } from "./GuessPads";
 import { Hologram } from "./Hologram";
-import { CloudLayer } from "./Clouds";
+import { Shockwave } from "./Shockwave";
+import { SumFlare } from "./SumFlare";
+import { TileRipple } from "./TileRipple";
 import { World } from "./World";
-import { BOARD_SIDE, placeTile } from "./boardMath";
+import { BOARD_SIDE, TILE_HEIGHT, placeTile } from "./boardMath";
 import { PALETTE } from "./palette";
 import { BoardView } from "./viewTypes";
 
-/** Guess pads only make sense while there's something to guess about --
- * hidden once the draw starts (the avatar/dice/hologram take over) or
- * before a round has opened. */
+/**
+ * Guess pads stay mounted through the draw so the winning pad's gold flare
+ * is actually visible. They used to be hidden for `drawing`/`settled`, but
+ * `winningSum` only becomes non-null once the draw lands -- so the entire
+ * winner state was rendered `visible={false}` and never once appeared on
+ * screen. They're hidden only before a round exists.
+ */
 function padsVisible(phase: BoardView["phase"]): boolean {
-  return phase === "open" || phase === "locked";
+  return phase !== "idle";
 }
 
 export function Scene({ view }: { view: BoardView }) {
-  const landedAt = view.walk ? view.walk.at + view.walk.steps * WALK_STEP_MS : null;
-  const diceOrigin = placeTile(view.walk?.startTile ?? view.avatarTile);
+  // Every choreography timestamp derives from the one master clock, so the
+  // camera, dice, avatar and effects can't drift apart.
+  const at = view.drawResultAt;
+  const steps = view.walk?.steps ?? 0;
+  const landedAt = at != null ? at + BEAT_WALK_AT_MS + walkDurationMs(steps) : null;
+  const landedPos = view.landedTile != null ? placeTile(view.landedTile) : null;
 
   return (
     <Canvas
@@ -79,11 +91,39 @@ export function Scene({ view }: { view: BoardView }) {
 
       <Suspense fallback={null}>
         <Figurines count={5} />
-        <Avatar avatarTile={view.avatarTile} walk={view.walk} landedTile={view.landedTile} />
+        <Avatar
+          avatarTile={view.avatarTile}
+          walk={view.walk}
+          drawResultAt={at}
+          landedTile={view.landedTile}
+        />
       </Suspense>
-      <Dice dice={view.dice} origin={{ x: diceOrigin.x, z: diceOrigin.z }} />
+
+      {/* Dice roll at the board's centre -- that airspace is empty, the
+          MONOPOLY wordmark under it is painted into the board texture. */}
+      <Dice dice={view.dice} drawResultAt={at} />
+      <SumFlare sum={view.winningSum} triggerAt={at} />
+
       <Hologram phase={view.phase} landedTile={view.landedTile} landedAt={landedAt} />
-      <CloudLayer active={view.cloudsActive} />
+      {landedPos && (
+        <>
+          <Shockwave
+            triggerAt={landedAt}
+            position={[landedPos.x, TILE_HEIGHT + 0.02, landedPos.z]}
+            color="#f5d90a"
+            maxRadius={BOARD_SIDE * 0.75}
+            durationMs={1200}
+          />
+          <CoinBurst
+            triggerAt={landedAt}
+            position={[landedPos.x, TILE_HEIGHT + 0.3, landedPos.z]}
+            count={view.youWon ? 36 : 24}
+          />
+        </>
+      )}
+      <TileRipple centerTile={view.landedTile} triggerAt={landedAt} />
+
+      <CinematicCamera drawResultAt={at} walk={view.walk} landedTile={view.landedTile} />
 
       <OrbitControls
         makeDefault
@@ -99,6 +139,11 @@ export function Scene({ view }: { view: BoardView }) {
       <EffectComposer multisampling={0}>
         <N8AO aoRadius={1.6} intensity={3.2} distanceFalloff={1.0} color="#1a1f2e" halfRes />
         <Bloom intensity={0.35} luminanceThreshold={0.9} luminanceSmoothing={0.15} mipmapBlur />
+        {/* Darkens the frame edges during the draw so the eye is pulled to
+            the centre. Replaces the old cloud layer as the anticipation cue --
+            those were lone faceted spheres larger than the avatar and read as
+            glitching artifacts rather than weather. SMAA stays last. */}
+        <Vignette offset={0.28} darkness={0.62} />
         <SMAA />
       </EffectComposer>
     </Canvas>

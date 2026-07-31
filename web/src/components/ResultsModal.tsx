@@ -1,24 +1,53 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getTile, lamportsToSol } from "@monopoly-sol/shared";
+import { drawSequenceDurationMs, getTile, lamportsToSol } from "@monopoly-sol/shared";
 import { useWallet } from "@solana/wallet-adapter-react";
 import { useGame } from "@/hooks/useGame";
 import { Confetti } from "./Confetti";
 
+const VISIBLE_MS = 9000;
+
 export function ResultsModal() {
-  const { settled, drawResult } = useGame();
+  const { round, settled, drawResult } = useGame();
   const { publicKey } = useWallet();
   const [open, setOpen] = useState(false);
 
+  const settledAt = settled?.at ?? null;
+  const sameRound = settled != null && drawResult != null && drawResult.roundId === settled.roundId;
+
+  // Never let a finished round's result sit over the next round's board --
+  // it dims the whole scene and covers the guess pads while players are
+  // trying to use them.
+  const stale = settled != null && round != null && round.roundId !== settled.roundId;
+  useEffect(() => {
+    if (stale) setOpen(false);
+  }, [stale]);
+
   useEffect(() => {
     if (!settled) return;
-    setOpen(true);
-    const id = setTimeout(() => setOpen(false), 9000);
-    return () => clearTimeout(id);
-  }, [settled?.at]);
+    setOpen(false);
 
-  if (!open || !settled) return null;
+    // `settled` fires when the last on-chain payout confirms, which with zero
+    // winners can be ~1s after the draw -- i.e. while the dice are still
+    // tumbling. Announcing then spoils the whole reveal. Hold the result
+    // until the choreography has actually finished playing.
+    const steps = sameRound ? drawResult!.diceA + drawResult!.diceB : 0;
+    const choreographyEndsAt = sameRound
+      ? drawResult!.at + drawSequenceDurationMs(steps)
+      : Date.now();
+    const delay = Math.max(0, choreographyEndsAt - Date.now());
+
+    const show = setTimeout(() => setOpen(true), delay);
+    const hide = setTimeout(() => setOpen(false), delay + VISIBLE_MS);
+    return () => {
+      clearTimeout(show);
+      clearTimeout(hide);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settledAt]);
+
+  if (!open || stale || !settled) return null;
 
   const tile = getTile(settled.landedTile);
   // `settled` doesn't itself carry the dice values -- pull them from the
