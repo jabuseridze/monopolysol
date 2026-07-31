@@ -2,8 +2,9 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useWallet } from "@solana/wallet-adapter-react";
+import { DICE_TUMBLE_MS } from "@monopoly-sol/shared";
 import { useGame } from "@/hooks/useGame";
-import { usePickTile } from "@/hooks/usePickTile";
+import { useSubmitGuess } from "@/hooks/useSubmitGuess";
 import { useSelection } from "@/hooks/useSelection";
 import { audio } from "@/lib/audio";
 import { Scene } from "./Scene";
@@ -13,11 +14,11 @@ export function GameCanvas() {
   const { round, drawCue, drawResult, settled } = useGame();
   const { publicKey } = useWallet();
   const roundId = round?.roundId ?? null;
-  const { pick } = usePickTile(roundId);
-  const { selected, setSelected } = useSelection();
+  const { submitGuess } = useSubmitGuess(roundId);
+  const { selected: selectedSum, setSelected: setSelectedSum } = useSelection();
 
   // Reset the local selection whenever a new round starts.
-  useEffect(() => setSelected(null), [roundId]);
+  useEffect(() => setSelectedSum(null), [roundId]);
 
   // Audio cues driven by server events.
   useEffect(() => {
@@ -43,24 +44,80 @@ export function GameCanvas() {
   const view: BoardView = useMemo(() => {
     const phase = round?.phase ?? "idle";
     const drawn = phase === "drawing" || phase === "settled";
+    // Only trust `drawResult` once it actually matches the round it's paired
+    // with -- a client that's had the socket open across a round boundary
+    // could otherwise be left animating a stale walk from the prior round.
+    const drawnForRound = round != null && drawResult != null && drawResult.roundId === round.roundId;
+
     return {
       phase,
-      // TODO(Task 7): `guessCounts` is keyed by dice-sum guess (2-12), not
-      // tile index -- `Board`/`Tile` still index this by tile.index below,
-      // which no longer lines up under the dice-walk mechanic. Left as a
-      // mechanical rename only; Task 7 owns the guess-pad UI rebuild.
-      guessCounts: round?.guessCounts ?? {},
-      selected,
+      avatarTile: round?.avatarTile ?? 0,
+      // The walk starts only once the dice tumble finishes -- dice roll,
+      // then the avatar walks that many tiles -- not simultaneously.
+      walk: drawnForRound
+        ? {
+            startTile: drawResult!.startTile,
+            steps: drawResult!.diceA + drawResult!.diceB,
+            at: drawResult!.at + DICE_TUMBLE_MS,
+          }
+        : null,
+      dice: drawnForRound ? { a: drawResult!.diceA, b: drawResult!.diceB, at: drawResult!.at } : null,
       landedTile: drawn ? round?.landedTile ?? null : null,
-      drawResultAt: drawResult?.at ?? null,
+      guessCounts: round?.guessCounts ?? {},
+      selectedSum,
+      winningSum: drawnForRound ? drawResult!.diceA + drawResult!.diceB : null,
+      disabled: phase !== "open",
       cloudsActive: phase === "locked" || phase === "drawing",
-      onPick: (i: number) => {
+      onGuess: (sum: number) => {
         audio.unlock();
-        setSelected(i);
-        pick(i);
+        setSelectedSum(sum);
+        submitGuess(sum);
       },
     };
-  }, [round, selected, drawResult?.at, pick]);
+  }, [round, selectedSum, drawResult, submitGuess]);
 
-  return <Scene view={view} />;
+  // TEMP-SCREENSHOT-DEBUG: remove before commit.
+  const debugView = buildDebugView(view);
+  return <Scene view={debugView ?? view} />;
+}
+
+function buildDebugView(base: BoardView): BoardView | null {
+  if (typeof window === "undefined") return null;
+  const mode = new URLSearchParams(window.location.search).get("debug");
+  if (!mode) return null;
+  const now = Date.now();
+  if (mode === "pads") {
+    return {
+      ...base,
+      phase: "open",
+      avatarTile: 5,
+      guessCounts: { 5: 2, 7: 4, 9: 1, 12: 1 },
+      selectedSum: 8,
+      winningSum: null,
+      disabled: false,
+    };
+  }
+  if (mode === "dice") {
+    return {
+      ...base,
+      phase: "drawing",
+      avatarTile: 5,
+      dice: { a: 3, b: 4, at: now - 600 },
+      walk: null,
+      landedTile: null,
+      winningSum: 7,
+    };
+  }
+  if (mode === "walk") {
+    return {
+      ...base,
+      phase: "drawing",
+      avatarTile: 12,
+      dice: { a: 3, b: 4, at: now - 3000 },
+      walk: { startTile: 5, steps: 7, at: now - 900 },
+      landedTile: 12,
+      winningSum: 7,
+    };
+  }
+  return null;
 }

@@ -2,13 +2,13 @@
 
 import { useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Text } from "@react-three/drei";
 import * as THREE from "three";
 import { NUM_TILES } from "@monopoly-sol/shared";
 import { GUESS_MAX, GUESS_MIN } from "@monopoly-sol/shared/effects";
 import { TILE_HEIGHT, placeTile } from "./boardMath";
 import { tileRegion } from "./board/atlasLayout";
 import { frameGeometry } from "./padFrame";
+import { PadChip } from "./PadChip";
 
 /** Cool cyan hologram color -- pops against the warm cream board and the
  * red/orange/pink property stripes, and makes the flip to gold read as a
@@ -19,10 +19,9 @@ const PAD_FILL_COLOR = new THREE.Color("#22e5ff");
 const PAD_EDGE_COLOR = new THREE.Color("#22e5ff").multiplyScalar(1.7);
 const WINNER_FILL_COLOR = new THREE.Color("#f5d90a");
 const WINNER_EDGE_COLOR = new THREE.Color("#f5d90a").multiplyScalar(1.6);
-const LABEL_COLOR = "#eafcff";
-const LABEL_WINNER_COLOR = "#3a2b00";
 const PAD_LIFT = 0.08; // clears the board surface + Tile.tsx's own highlight quad
 const FRAME_THICKNESS = 0.12;
+const CHIP_LIFT = 0.55; // chip floats this far above the pad surface
 
 interface Props {
   /** Tile the avatar is currently resting on; pads sit on avatarTile+2..+12. */
@@ -95,7 +94,9 @@ function GuessPad({ sum, tileIndex, count, selected, isWinner, disabled, onClick
 
     if (fill.current) {
       fill.current.color.copy(isWinner ? WINNER_FILL_COLOR : PAD_FILL_COLOR);
-      fill.current.opacity = isWinner ? 0.42 + pulse : selected ? 0.34 : hover ? 0.26 : 0.16;
+      // Idle fill nudged up from 0.16 -> 0.22 so the pad reads clearly as a
+      // "click here" affordance even before the chip/frame catch the eye.
+      fill.current.opacity = isWinner ? 0.42 + pulse : selected ? 0.34 : hover ? 0.28 : 0.22;
     }
     if (edge.current) {
       edge.current.color.copy(isWinner ? WINNER_EDGE_COLOR : PAD_EDGE_COLOR);
@@ -139,35 +140,18 @@ function GuessPad({ sum, tileIndex, count, selected, isWinner, disabled, onClick
         <meshBasicMaterial ref={edge} transparent opacity={0.7} depthWrite={false} toneMapped={false} />
       </mesh>
 
-      {/* Laid flat on the pad (same rotation as the fill/frame quads) rather
-          than standing upright -- an unrotated <Text> faces world +Z, which
-          from this board's fixed oblique camera renders as an illegible
-          slanted sliver instead of a readable number. */}
-      <group position={[0, TILE_HEIGHT + PAD_LIFT + 0.03, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <Text
-          fontSize={0.46}
-          color={isWinner ? LABEL_WINNER_COLOR : LABEL_COLOR}
-          outlineWidth={0.035}
-          outlineColor={isWinner ? "#fff3c4" : "#083039"}
-          anchorX="center"
-          anchorY="middle"
-        >
-          {String(sum)}
-        </Text>
-        {count > 0 && (
-          <Text
-            position={[0, -0.42, 0]}
-            fontSize={0.2}
-            color="#0b3b45"
-            outlineWidth={0.015}
-            outlineColor="#eafcff"
-            anchorX="center"
-            anchorY="middle"
-          >
-            {count}
-          </Text>
-        )}
-      </group>
+      {/* Billboarded chip carrying the digit, floating above the pad --
+          replaces text laid flat on the tile, which collided with the board
+          art's printed property names and read as an illegible sideways
+          sliver from this fixed oblique camera. */}
+      <PadChip
+        sum={sum}
+        count={count}
+        selected={selected}
+        hover={hover}
+        isWinner={isWinner}
+        liftY={TILE_HEIGHT + PAD_LIFT + CHIP_LIFT}
+      />
     </group>
   );
 }

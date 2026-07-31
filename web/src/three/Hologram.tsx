@@ -3,57 +3,49 @@
 import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
-import { NUM_TILES, RoundPhase } from "@monopoly-sol/shared";
+import { RoundPhase } from "@monopoly-sol/shared";
 import { placeTile, TILE_HEIGHT } from "./boardMath";
 
 interface Props {
   phase: RoundPhase;
   landedTile: number | null;
-  drawResultAt: number | null;
+  /** Epoch ms the avatar's walk animation finished (null until then). */
+  landedAt: number | null;
 }
 
-const SPIN_SECONDS = 6;
-const LAPS = 3;
 const BEAM_Y = 3.2;
+const BEAT_SEC = 1.4; // extra emphasis right after landing, decays over this window
 
-/** Yellow holographic scanner: spins across tiles then eases onto the landed
- * tile. TODO(Task 7): this is the old tile-lottery draw choreography (a
- * roulette-style spin-and-land). The server now emits dice values + a start
- * tile (`DrawResultDTO.diceA/diceB/startTile`) for an actual dice-roll +
- * avatar-walk animation -- Task 7 likely replaces this component's whole
- * approach rather than just renaming its prop. */
-export function Hologram({ phase, landedTile, drawResultAt }: Props) {
+/**
+ * Yellow holographic beam that settles onto the tile the avatar just landed
+ * on, as a landing-emphasis marker. Previously a roulette-style scanner that
+ * spun across every tile before the pivot -- the server now drives an actual
+ * dice-roll + avatar-walk sequence (see `Dice.tsx` / `Avatar.tsx`), so
+ * there's nothing left to spin through; this just eases onto the final spot
+ * and pulses.
+ */
+export function Hologram({ phase, landedTile, landedAt }: Props) {
   const group = useRef<THREE.Group>(null);
   const ring = useRef<THREE.Mesh>(null);
-
-  const visible = phase === "locked" || phase === "drawing" || phase === "settled";
 
   useFrame((state) => {
     const g = group.current;
     if (!g) return;
+
+    const drawn = phase === "drawing" || phase === "settled";
+    const started = landedAt != null && Date.now() >= landedAt;
+    const visible = drawn && landedTile != null && started;
     g.visible = visible;
-    if (!visible) return;
+    if (!visible || landedTile == null || landedAt == null) return;
 
-    let index: number;
-    if (landedTile != null && drawResultAt != null) {
-      const elapsed = (Date.now() - drawResultAt) / 1000;
-      const p = Math.min(elapsed / SPIN_SECONDS, 1);
-      const eased = 1 - Math.pow(1 - p, 3); // decelerate
-      const total = LAPS * NUM_TILES + landedTile;
-      index = p >= 1 ? landedTile : Math.floor(eased * total) % NUM_TILES;
-    } else {
-      // Locked but not yet drawn: idle fast spin.
-      index = Math.floor(state.clock.elapsedTime * 9) % NUM_TILES;
-    }
-
-    const p = placeTile(index);
-    // Smoothly chase the target tile so motion never snaps.
+    const p = placeTile(landedTile);
+    // Ease onto the tile rather than snapping, so it reads as "settling."
     g.position.lerp(new THREE.Vector3(p.x, BEAM_Y, p.z), 0.4);
     if (ring.current) ring.current.rotation.y = state.clock.elapsedTime * 4;
 
-    const landed = landedTile != null && drawResultAt != null && (Date.now() - drawResultAt) / 1000 >= SPIN_SECONDS;
-    const s = landed ? 1.15 + Math.sin(state.clock.elapsedTime * 5) * 0.12 : 1;
-    g.scale.setScalar(s);
+    const beat = Math.max(0, 1 - (Date.now() - landedAt) / 1000 / BEAT_SEC);
+    const pulseAmount = 0.4 + 0.6 * beat; // strong right after landing, settles to a gentle idle glow
+    g.scale.setScalar(1.15 + Math.sin(state.clock.elapsedTime * 5) * 0.12 * pulseAmount);
   });
 
   return (

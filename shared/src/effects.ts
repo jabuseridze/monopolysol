@@ -1,6 +1,7 @@
 /** v1 Tile effects — prize size only, applied to the next round. */
 
-import { LAMPORTS_PER_SOL } from "./constants";
+import { LAMPORTS_PER_SOL, lamportsToSol } from "./constants";
+import { getTile } from "./tiles";
 
 /** Base prize: 0.5 SOL. */
 export const BASE_PRIZE_LAMPORTS = Math.round(0.5 * LAMPORTS_PER_SOL);
@@ -104,4 +105,49 @@ export function diceSumProbability(sum: number): number {
     8: 5, 9: 4, 10: 3, 11: 2, 12: 1,
   };
   return (counts[sum] ?? 0) / 36;
+}
+
+/** Trims a lamport amount to a compact SOL string with no trailing zeros
+ * beyond one decimal place (0.5, 0.25, 1.0, 0.1 -- never "1.00" or "0.30"). */
+function fmtSol(lamports: number): string {
+  const s = lamportsToSol(lamports).toFixed(2);
+  return s.endsWith("0") ? s.slice(0, -1) : s;
+}
+
+export interface TileEffect {
+  /** Short name for the effect, shown as the tooltip's headline. */
+  label: string;
+  /** Full sentence describing what landing here does to the next prize. */
+  detail: string;
+}
+
+/**
+ * Human-readable summary of a tile's effect on the *next* round's prize, for
+ * the board's hover tooltip (see `web/src/three/Tile.tsx`). Returns null for
+ * plain tiles with no special effect.
+ */
+export function effectForTile(index: number): TileEffect | null {
+  if (index === 0) {
+    return { label: "GO", detail: `Passing or landing on GO adds +${fmtSol(GO_BONUS_LAMPORTS)} SOL to the next prize` };
+  }
+  if (PENALTY_TILES.has(index)) {
+    const name = getTile(index)?.name ?? "Tax";
+    return { label: name, detail: `Next prize drops to ${fmtSol(PENALTY_PRIZE_LAMPORTS)} SOL` };
+  }
+  if (index === RUG_TILE) {
+    return { label: "Get Rugged", detail: `Next prize drops to ${fmtSol(RUG_PRIZE_LAMPORTS)} SOL` };
+  }
+  if (PUMP_TILES.has(index)) {
+    return { label: "Random Pump", detail: `Next prize jumps to ${fmtSol(PUMP_PRIZE_LAMPORTS)} SOL` };
+  }
+  return null;
+}
+
+/**
+ * Tiles that warrant a one-shot "cheer" reaction from the avatar on landing:
+ * Random Pump tiles boost the next prize outright, and GO adds its bonus.
+ * Everything else gets a plain idle settle.
+ */
+export function isCheerLanding(landedTile: number): boolean {
+  return landedTile === 0 || PUMP_TILES.has(landedTile);
 }

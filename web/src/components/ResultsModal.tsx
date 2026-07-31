@@ -7,7 +7,7 @@ import { useGame } from "@/hooks/useGame";
 import { Confetti } from "./Confetti";
 
 export function ResultsModal() {
-  const { settled } = useGame();
+  const { settled, drawResult } = useGame();
   const { publicKey } = useWallet();
   const [open, setOpen] = useState(false);
 
@@ -20,10 +20,12 @@ export function ResultsModal() {
 
   if (!open || !settled) return null;
 
-  // TODO(Task 7): `landedTile` is where the avatar landed, not necessarily a
-  // "winning" tile under the dice-sum mechanic -- this modal's copy/framing
-  // is Task 7's to redesign around the guess-sum win condition.
   const tile = getTile(settled.landedTile);
+  // `settled` doesn't itself carry the dice values -- pull them from the
+  // `drawResult` broadcast for the same round (fired moments earlier in the
+  // same draw sequence) to show the winning sum.
+  const dice = drawResult && drawResult.roundId === settled.roundId ? drawResult : null;
+  const winningSum = dice ? dice.diceA + dice.diceB : null;
   const youWon = publicKey ? settled.winners.includes(publicKey.toBase58()) : false;
   const share = lamportsToSol(settled.shareLamports);
 
@@ -34,14 +36,20 @@ export function ResultsModal() {
         <div style={{ fontSize: 12, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--muted)" }}>
           Round #{settled.roundId} result
         </div>
+        {dice && (
+          <div style={{ fontSize: 13, color: "var(--muted)" }}>
+            Dice rolled {dice.diceA} + {dice.diceB} = {winningSum}
+          </div>
+        )}
         <div style={{ fontSize: 26, fontWeight: 800, color: "var(--accent)", margin: "6px 0" }}>
-          {tile?.name ?? `Tile ${settled.landedTile}`}
+          Landed on {tile?.name ?? `Tile ${settled.landedTile}`}
         </div>
         {settled.winners.length === 0 ? (
           <div style={{ color: "var(--muted)" }}>No winners - prize rolls into the next round.</div>
         ) : (
           <div style={{ fontSize: 15 }}>
-            {settled.winners.length} winner{settled.winners.length > 1 ? "s" : ""} split{" "}
+            {settled.winners.length} winner{settled.winners.length > 1 ? "s" : ""} guessed{" "}
+            <span className="mono" style={{ fontWeight: 700 }}>{winningSum}</span> and split{" "}
             <span className="mono" style={{ fontWeight: 700 }}>{lamportsToSol(settled.prizeLamports).toFixed(2)} SOL</span>
             <div style={{ marginTop: 6 }}>
               <span className="mono">{share.toFixed(4)} SOL</span> each

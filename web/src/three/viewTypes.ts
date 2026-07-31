@@ -7,17 +7,25 @@ import { RoundPhase } from "@monopoly-sol/shared";
  */
 export interface BoardView {
   phase: RoundPhase;
-  /** guessSum (2-12) -> backer count. TODO(Task 7): `Board`/`Tile` currently
-   * index this by tile.index, which no longer matches under the dice-walk
-   * mechanic -- see `GameCanvas.tsx`. */
-  guessCounts: Record<number, number>;
-  /** The local player's currently selected tile (null if none). */
-  selected: number | null;
+  /** Tile the avatar is currently resting on (or has landed on, once drawn). */
+  avatarTile: number;
+  /** Present only once this round's draw has happened: drives the avatar's
+   * walk from `startTile` by `steps` tiles, timed off `at` (epoch ms). */
+  walk: { startTile: number; steps: number; at: number } | null;
+  /** Present only once this round's draw has happened: the committed dice
+   * faces + when they were revealed, timed off `at` (epoch ms). */
+  dice: { a: number; b: number; at: number } | null;
   /** Tile the avatar landed on once drawn (null while picking). */
   landedTile: number | null;
-  /** Timestamp when the draw result arrived, to start the hologram. */
-  drawResultAt: number | null;
+  /** guessSum (2-12) -> number of wallets currently backing it. */
+  guessCounts: Record<number, number>;
+  /** The local player's currently selected guess sum (null if none). */
+  selectedSum: number | null;
+  /** Guess sum matching the actual dice roll, once known (null until then). */
+  winningSum: number | null;
+  /** True once guessing has closed for this round. */
+  disabled: boolean;
   /** Whether the cloud layer should be visible. */
   cloudsActive: boolean;
-  onPick: (tileIndex: number) => void;
+  onGuess: (sum: number) => void;
 }

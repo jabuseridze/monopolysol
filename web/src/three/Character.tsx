@@ -2,10 +2,9 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { useFrame } from "@react-three/fiber";
-import { useAnimations, useGLTF } from "@react-three/drei";
-import { clone as cloneSkeleton } from "three/examples/jsm/utils/SkeletonUtils.js";
 import * as THREE from "three";
 import { RUN_CLIP } from "./assets";
+import { useKayKitModel } from "./useKayKitModel";
 
 const RING_MIN = 2.6;
 const RING_MAX = 5.8;
@@ -20,24 +19,7 @@ interface Props {
 /** KayKit adventurer that runs between waypoints on the center track. */
 export function Character({ url, speed, seed, scale }: Props) {
   const root = useRef<THREE.Group>(null);
-  const { scene, animations } = useGLTF(url);
-  const cloned = useMemo(() => {
-    const c = cloneSkeleton(scene);
-    c.traverse((o) => {
-      const mesh = o as THREE.Mesh;
-      if (mesh.isMesh) {
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
-        if (!(o as THREE.SkinnedMesh).isSkinnedMesh && /sword|shield|axe|bow|staff|wand|arrow|quiver|mug|book|bomb/i.test(mesh.name)) {
-          mesh.visible = false;
-        }
-      }
-    });
-    return c;
-  }, [scene]);
-
-  // Bind clips to the CLONE (not the shared GLTF scene).
-  const { actions, names } = useAnimations(animations, cloned);
+  const { scene: cloned, actions, names } = useKayKitModel(url);
   const pos = useMemo(() => waypoint(seed), [seed]);
   const target = useRef(waypoint(seed + 1));
   const facing = useRef(0);

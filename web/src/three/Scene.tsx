@@ -5,17 +5,30 @@ import { Canvas } from "@react-three/fiber";
 import { Environment, Lightformer, OrbitControls, SoftShadows } from "@react-three/drei";
 import { Bloom, EffectComposer, N8AO, SMAA } from "@react-three/postprocessing";
 import * as THREE from "three";
+import { WALK_STEP_MS } from "@monopoly-sol/shared";
+import { Avatar } from "./Avatar";
 import { Board } from "./Board";
+import { Dice } from "./Dice";
 import { Figurines } from "./Figurines";
 import { GuessPads } from "./GuessPads";
 import { Hologram } from "./Hologram";
 import { CloudLayer } from "./Clouds";
 import { World } from "./World";
-import { BOARD_SIDE } from "./boardMath";
+import { BOARD_SIDE, placeTile } from "./boardMath";
 import { PALETTE } from "./palette";
 import { BoardView } from "./viewTypes";
 
+/** Guess pads only make sense while there's something to guess about --
+ * hidden once the draw starts (the avatar/dice/hologram take over) or
+ * before a round has opened. */
+function padsVisible(phase: BoardView["phase"]): boolean {
+  return phase === "open" || phase === "locked";
+}
+
 export function Scene({ view }: { view: BoardView }) {
+  const landedAt = view.walk ? view.walk.at + view.walk.steps * WALK_STEP_MS : null;
+  const diceOrigin = placeTile(view.walk?.startTile ?? view.avatarTile);
+
   return (
     <Canvas
       shadows
@@ -50,31 +63,26 @@ export function Scene({ view }: { view: BoardView }) {
 
       <World />
       <Suspense fallback={null}>
-        <Board
-          guessCounts={view.guessCounts}
-          selected={view.selected}
-          landedTile={view.landedTile}
-          phase={view.phase}
-          onPick={view.onPick}
-        />
+        <Board />
       </Suspense>
-      {/* TEMP (Task 7 visual gate): hardcoded avatarTile=0 fallback until
-          BoardView threads real round state through. Replace with
-          view.avatarTile / view.selectedSum / view.winningSum once the rest
-          of the pivot is wired up. */}
-      <GuessPads
-        avatarTile={0}
-        guessCounts={view.guessCounts}
-        selectedSum={null}
-        winningSum={null}
-        disabled={false}
-        onGuess={() => {}}
-      />
+
+      <group visible={padsVisible(view.phase)}>
+        <GuessPads
+          avatarTile={view.avatarTile}
+          guessCounts={view.guessCounts}
+          selectedSum={view.selectedSum}
+          winningSum={view.winningSum}
+          disabled={view.disabled}
+          onGuess={view.onGuess}
+        />
+      </group>
 
       <Suspense fallback={null}>
         <Figurines count={5} />
+        <Avatar avatarTile={view.avatarTile} walk={view.walk} landedTile={view.landedTile} />
       </Suspense>
-      <Hologram phase={view.phase} landedTile={view.landedTile} drawResultAt={view.drawResultAt} />
+      <Dice dice={view.dice} origin={{ x: diceOrigin.x, z: diceOrigin.z }} />
+      <Hologram phase={view.phase} landedTile={view.landedTile} landedAt={landedAt} />
       <CloudLayer active={view.cloudsActive} />
 
       <OrbitControls
