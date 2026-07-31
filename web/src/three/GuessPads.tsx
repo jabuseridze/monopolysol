@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { NUM_TILES } from "@monopoly-sol/shared";
@@ -32,6 +32,11 @@ interface Props {
   selectedSum: number | null;
   /** Guess sum matching the actual landedTile, once the round resolves. */
   winningSum: number | null;
+  /** Epoch ms the avatar's walk completes. The winning pad must not flip
+   * gold before this: `winningSum` is known the moment the draw is emitted,
+   * so lighting it up immediately would give the answer away while the dice
+   * are still in the air. Null outside a draw. */
+  revealAt: number | null;
   /** True once guessing has closed for this round. */
   disabled: boolean;
   onGuess: (sum: number) => void;
@@ -41,12 +46,39 @@ interface Props {
  * the avatar would land on for each sum. Reuses Tile.tsx's hitbox + animated
  * highlight-quad pattern; adds a frame mesh for the "brighter edge glow"
  * look the bloom pass turns into a soft rim. */
-export function GuessPads({ avatarTile, guessCounts, selectedSum, winningSum, disabled, onGuess }: Props) {
+export function GuessPads({
+  avatarTile,
+  guessCounts,
+  selectedSum,
+  winningSum,
+  revealAt,
+  disabled,
+  onGuess,
+}: Props) {
   const sums = useMemo(() => {
     const arr: number[] = [];
     for (let s = GUESS_MIN; s <= GUESS_MAX; s++) arr.push(s);
     return arr;
   }, []);
+
+  // `winningSum` is known the instant the draw is emitted, so flipping a pad
+  // gold on it directly would announce the answer while the dice are still
+  // in the air. Hold the reveal until the avatar has actually arrived.
+  const [revealed, setRevealed] = useState(false);
+  useEffect(() => {
+    if (revealAt == null) {
+      setRevealed(false);
+      return;
+    }
+    const delay = revealAt - Date.now();
+    if (delay <= 0) {
+      setRevealed(true);
+      return;
+    }
+    setRevealed(false);
+    const id = setTimeout(() => setRevealed(true), delay);
+    return () => clearTimeout(id);
+  }, [revealAt]);
 
   return (
     <group>
@@ -57,7 +89,7 @@ export function GuessPads({ avatarTile, guessCounts, selectedSum, winningSum, di
           tileIndex={(avatarTile + sum) % NUM_TILES}
           count={guessCounts[sum] ?? 0}
           selected={selectedSum === sum}
-          isWinner={winningSum === sum}
+          isWinner={revealed && winningSum === sum}
           disabled={disabled}
           onClick={() => onGuess(sum)}
         />
@@ -90,17 +122,18 @@ function GuessPad({ sum, tileIndex, count, selected, isWinner, disabled, onClick
 
   useFrame((state) => {
     const t = state.clock.elapsedTime;
-    const pulse = isWinner ? Math.sin(t * 7) * 0.15 : selected ? Math.sin(t * 3) * 0.06 : 0;
+    const won = isWinner;
+    const pulse = won ? Math.sin(t * 7) * 0.15 : selected ? Math.sin(t * 3) * 0.06 : 0;
 
     if (fill.current) {
-      fill.current.color.copy(isWinner ? WINNER_FILL_COLOR : PAD_FILL_COLOR);
+      fill.current.color.copy(won ? WINNER_FILL_COLOR : PAD_FILL_COLOR);
       // Idle fill nudged up from 0.16 -> 0.22 so the pad reads clearly as a
       // "click here" affordance even before the chip/frame catch the eye.
-      fill.current.opacity = isWinner ? 0.42 + pulse : selected ? 0.34 : hover ? 0.28 : 0.22;
+      fill.current.opacity = won ? 0.42 + pulse : selected ? 0.34 : hover ? 0.28 : 0.22;
     }
     if (edge.current) {
-      edge.current.color.copy(isWinner ? WINNER_EDGE_COLOR : PAD_EDGE_COLOR);
-      edge.current.opacity = isWinner ? 1 : selected ? 0.95 : hover ? 0.85 : 0.7;
+      edge.current.color.copy(won ? WINNER_EDGE_COLOR : PAD_EDGE_COLOR);
+      edge.current.opacity = won ? 1 : selected ? 0.95 : hover ? 0.85 : 0.7;
     }
   });
 

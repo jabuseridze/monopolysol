@@ -41,6 +41,15 @@ export function Scene({ view }: { view: BoardView }) {
   const landedAt = at != null ? at + BEAT_WALK_AT_MS + walkDurationMs(steps) : null;
   const landedPos = view.landedTile != null ? placeTile(view.landedTile) : null;
 
+  // The coordinator advances `avatarTile` to the LANDING tile the instant it
+  // emits the draw (roundPhases.ts sets `avatarTile: round.landedTile`), so
+  // anchoring the pads to it makes the whole 11-pad window slide onto the
+  // destination while the dice are still in the air -- silently giving the
+  // answer away before the roll resolves. Anchor to where the avatar started
+  // instead: those are the options players actually bet on this round, and
+  // the winner among them is what flips gold at the landing.
+  const padAnchorTile = view.walk ? view.walk.startTile : view.avatarTile;
+
   return (
     <Canvas
       shadows
@@ -80,10 +89,11 @@ export function Scene({ view }: { view: BoardView }) {
 
       <group visible={padsVisible(view.phase)}>
         <GuessPads
-          avatarTile={view.avatarTile}
+          avatarTile={padAnchorTile}
           guessCounts={view.guessCounts}
           selectedSum={view.selectedSum}
           winningSum={view.winningSum}
+          revealAt={landedAt}
           disabled={view.disabled}
           onGuess={view.onGuess}
         />
