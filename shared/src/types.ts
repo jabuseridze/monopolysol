@@ -30,7 +30,12 @@ export interface RoundStateDTO {
   winners: string[];
   /** Prize armed for the round after this one (may be boosted by an effect tile). */
   nextPrizeLamports: number;
-  /** Distinct connected wallets right now (spectators excluded). */
+  /**
+   * Always 0 on this channel -- presence is broadcast separately and on its own
+   * cadence (see `PresenceDTO` / the `presence` event), so the round snapshot
+   * never carries a live count. Read `useGame().onlineWallets` for the real
+   * value; binding a UI counter to this field would pin it at zero forever.
+   */
   onlineWallets: number;
 }
 
