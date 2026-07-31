@@ -1,11 +1,13 @@
 "use client";
 
 import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { useWallet } from "@solana/wallet-adapter-react";
 import { io, Socket } from "socket.io-client";
 import {
   ClientToServerEvents,
   DrawCueDTO,
   DrawResultDTO,
+  PresenceDTO,
   RoundStateDTO,
   ServerToClientEvents,
   SettledDTO,
@@ -21,25 +23,38 @@ interface GameState {
   drawCue: (DrawCueDTO & { at: number }) | null;
   drawResult: (DrawResultDTO & { at: number }) | null;
   settled: (SettledDTO & { at: number }) | null;
+  /** Distinct connected wallets, from the coordinator's throttled presence broadcast. */
+  onlineWallets: number;
+  /** Live guess-sum tally, refreshed alongside `onlineWallets`. */
+  guessCounts: Record<number, number>;
 }
 
-const GameContext = createContext<GameState>({
+const initialState: GameState = {
   connected: false,
   round: null,
   drawCue: null,
   drawResult: null,
   settled: null,
-});
+  onlineWallets: 0,
+  guessCounts: {},
+};
+
+const GameContext = createContext<GameState>(initialState);
 
 export function GameProvider({ children }: { children: React.ReactNode }) {
-  const [state, setState] = useState<GameState>({
-    connected: false,
-    round: null,
-    drawCue: null,
-    drawResult: null,
-    settled: null,
-  });
+  const [state, setState] = useState<GameState>(initialState);
   const socketRef = useRef<Socket<ServerToClientEvents, ClientToServerEvents> | null>(null);
+  const { publicKey } = useWallet();
+  const walletRef = useRef<string | null>(null);
+
+  // Re-announce the wallet to the coordinator whenever it connects/changes/
+  // disconnects, so presence tracking stays accurate without waiting for a
+  // socket reconnect. Buffered by socket.io-client if the socket isn't
+  // connected yet; flushed once it is.
+  useEffect(() => {
+    walletRef.current = publicKey ? publicKey.toBase58() : null;
+    socketRef.current?.emit("client:hello", walletRef.current);
+  }, [publicKey]);
 
   useEffect(() => {
     // socket.io-client 4.8.3's `io()`/`lookup()` factory isn't itself
@@ -51,7 +66,10 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     });
     socketRef.current = socket;
 
-    socket.on("connect", () => setState((s) => ({ ...s, connected: true })));
+    socket.on("connect", () => {
+      setState((s) => ({ ...s, connected: true }));
+      socket.emit("client:hello", walletRef.current);
+    });
     socket.on("disconnect", () => setState((s) => ({ ...s, connected: false })));
 
     socket.on(SOCKET_EVENTS.roundState, (round: RoundStateDTO) =>
@@ -72,6 +90,9 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     );
     socket.on(SOCKET_EVENTS.settled, (r: SettledDTO) =>
       setState((s) => ({ ...s, settled: { ...r, at: Date.now() } }))
+    );
+    socket.on(SOCKET_EVENTS.presence, (p: PresenceDTO) =>
+      setState((s) => ({ ...s, onlineWallets: p.onlineWallets, guessCounts: p.guessCounts }))
     );
 
     return () => {

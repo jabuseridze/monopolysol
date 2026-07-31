@@ -6,6 +6,7 @@ import { ClientToServerEvents, ServerToClientEvents, SOCKET_EVENTS } from "@mono
 import { Chain } from "./chain.js";
 import { loadConfig } from "./config.js";
 import { Emitter } from "./emitter.js";
+import { PresenceTracker } from "./presence.js";
 import { RoundLoop } from "./roundLoop.js";
 
 async function main() {
@@ -50,9 +51,17 @@ async function main() {
 
   const loop = new RoundLoop(chain, emit, cfg.roundSecretPath);
 
+  const presence = new PresenceTracker(
+    () => loop.getSnapshot().guessCounts,
+    (p) => io.emit(SOCKET_EVENTS.presence, p)
+  );
+
   io.on("connection", (socket) => {
     // Send the current snapshot immediately so late joiners are in sync.
     socket.emit(SOCKET_EVENTS.roundState, loop.getSnapshot());
+
+    socket.on("client:hello", (walletBase58) => presence.hello(socket.id, walletBase58));
+    socket.on("disconnect", () => presence.disconnect(socket.id));
   });
 
   server.listen(cfg.port, () => {
