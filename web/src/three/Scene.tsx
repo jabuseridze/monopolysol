@@ -7,6 +7,7 @@ import { Bloom, EffectComposer, N8AO, SMAA } from "@react-three/postprocessing";
 import * as THREE from "three";
 import { Board } from "./Board";
 import { Figurines } from "./Figurines";
+import { GuessPads } from "./GuessPads";
 import { Hologram } from "./Hologram";
 import { CloudLayer } from "./Clouds";
 import { World } from "./World";
@@ -57,6 +58,19 @@ export function Scene({ view }: { view: BoardView }) {
           onPick={view.onPick}
         />
       </Suspense>
+      {/* TEMP (Task 7 visual gate): hardcoded avatarTile=0 fallback until
+          BoardView threads real round state through. Replace with
+          view.avatarTile / view.selectedSum / view.winningSum once the rest
+          of the pivot is wired up. */}
+      <GuessPads
+        avatarTile={0}
+        guessCounts={view.guessCounts}
+        selectedSum={null}
+        winningSum={null}
+        disabled={false}
+        onGuess={() => {}}
+      />
+
       <Suspense fallback={null}>
         <Figurines count={5} />
       </Suspense>
