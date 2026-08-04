@@ -11,6 +11,7 @@
     "./types": "./src/types.ts",
     "./constants": "./src/constants.ts",
     "./effects": "./src/effects.ts",
+    "./effectCopy": "./src/effectCopy.ts",
     "./ringPath": "./src/ringPath.ts",
     "./layout": "./src/layout.ts"
   },

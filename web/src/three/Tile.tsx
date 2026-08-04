@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Html } from "@react-three/drei";
 import { Tile as TileData } from "@monopoly-sol/shared";
-import { effectForTile } from "@monopoly-sol/shared/effects";
+import { effectForTile } from "@monopoly-sol/shared/effectCopy";
 import { TILE_HEIGHT } from "./boardMath";
 import { TileRegion } from "./board/atlasLayout";
 

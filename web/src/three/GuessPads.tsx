@@ -5,6 +5,7 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { NUM_TILES } from "@monopoly-sol/shared";
 import { GUESS_MAX, GUESS_MIN } from "@monopoly-sol/shared/effects";
+import { effectForTile } from "@monopoly-sol/shared/effectCopy";
 import { TILE_HEIGHT, placeTile } from "./boardMath";
 import { tileRegion } from "./board/atlasLayout";
 import { frameGeometry } from "./padFrame";
@@ -100,6 +101,8 @@ export function GuessPads({
 
 interface PadProps {
   sum: number;
+  /** Tile this pad sits on. Also decides the effect badge -- static board
+   * data, so it's safe (and the entire point) to show it while guessing. */
   tileIndex: number;
   count: number;
   selected: boolean;
@@ -111,6 +114,7 @@ interface PadProps {
 function GuessPad({ sum, tileIndex, count, selected, isWinner, disabled, onClick }: PadProps) {
   const region = tileRegion(tileIndex);
   const pos = placeTile(tileIndex);
+  const effect = effectForTile(tileIndex);
   const fill = useRef<THREE.MeshBasicMaterial>(null);
   const edge = useRef<THREE.MeshBasicMaterial>(null);
   const [hover, setHover] = useState(false);
@@ -183,6 +187,7 @@ function GuessPad({ sum, tileIndex, count, selected, isWinner, disabled, onClick
         selected={selected}
         hover={hover}
         isWinner={isWinner}
+        effect={effect}
         liftY={TILE_HEIGHT + PAD_LIFT + CHIP_LIFT}
       />
     </group>

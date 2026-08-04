@@ -4,6 +4,7 @@ import { useRef } from "react";
 import { useFrame } from "@react-three/fiber";
 import { Billboard, Text } from "@react-three/drei";
 import * as THREE from "three";
+import type { TileEffect } from "@monopoly-sol/shared/effectCopy";
 
 /** Same cyan/gold hologram palette as `GuessPads.tsx` -- kept in sync by eye
  * since the two files intentionally don't share color constants (this is
@@ -17,12 +18,23 @@ const LABEL_WINNER_COLOR = "#3a2b00";
 
 const CHIP_RADIUS = 0.34;
 
+/** Badge colours for pads that happen to sit on an effect tile. Gold reads
+ * as "good" and matches the HUD accent; the rose reads as "careful" without
+ * colliding with the board art's red property stripes. Both are pushed past
+ * 1.0 so the bloom pass picks them out the way it does the pad rims. */
+const BADGE_BOOST = new THREE.Color("#f5d90a").multiplyScalar(1.5);
+const BADGE_PENALTY = new THREE.Color("#ff5c7a").multiplyScalar(1.5);
+const BADGE_RADIUS = 0.13;
+
 interface Props {
   sum: number;
   count: number;
   selected: boolean;
   hover: boolean;
   isWinner: boolean;
+  /** Effect on the tile this pad sits on, if any. Static board data -- never
+   * derived from the draw result, so badging cannot leak the winner. */
+  effect: TileEffect | null;
   /** World-space height (above the pad's own group origin) to float at. */
   liftY: number;
 }
@@ -35,7 +47,7 @@ interface Props {
  * sideways sliver from this fixed oblique camera. Floating + billboarding is
  * the durable fix -- angle-specific tweaks to flat text keep recurring here.
  */
-export function PadChip({ sum, count, selected, hover, isWinner, liftY }: Props) {
+export function PadChip({ sum, count, selected, hover, isWinner, effect, liftY }: Props) {
   const fill = useRef<THREE.MeshBasicMaterial>(null);
   const edge = useRef<THREE.MeshBasicMaterial>(null);
 
@@ -84,6 +96,42 @@ export function PadChip({ sum, count, selected, hover, isWinner, liftY }: Props)
           anchorY="middle"
         >
           {count}
+        </Text>
+      )}
+
+      {/* Effect badge. The pad's own hitbox sits above the tile's, so the
+          board tooltip in `Tile.tsx` never fires for these 11 tiles -- the
+          hover label below is what replaces it. */}
+      {effect && (
+        <group position={[CHIP_RADIUS * 0.82, CHIP_RADIUS * 0.82, 0.003]}>
+          <mesh>
+            <circleGeometry args={[BADGE_RADIUS, 20]} />
+            <meshBasicMaterial
+              color={effect.tone === "boost" ? BADGE_BOOST : BADGE_PENALTY}
+              transparent
+              opacity={0.95}
+              depthWrite={false}
+              toneMapped={false}
+            />
+          </mesh>
+          <Text position={[0, 0.005, 0.001]} fontSize={0.17} color="#0b1020" anchorX="center" anchorY="middle">
+            {effect.tone === "boost" ? "+" : "-"}
+          </Text>
+        </group>
+      )}
+      {effect && hover && (
+        <Text
+          position={[0, CHIP_RADIUS + 0.28, 0.002]}
+          fontSize={0.15}
+          maxWidth={3}
+          textAlign="center"
+          color="#eafcff"
+          outlineWidth={0.014}
+          outlineColor="#083039"
+          anchorX="center"
+          anchorY="middle"
+        >
+          {effect.label}
         </Text>
       )}
     </Billboard>
