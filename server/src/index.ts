@@ -24,8 +24,8 @@ async function main() {
 
   const emit: Emitter = {
     state: (s) => io.emit(SOCKET_EVENTS.roundState, s),
-    tick: (roundId, secondsLeft, phase) =>
-      io.emit(SOCKET_EVENTS.tick, { roundId, secondsLeft, phase }),
+    tick: (roundId, secondsLeft, locksAtWall, phase) =>
+      io.emit(SOCKET_EVENTS.tick, { roundId, secondsLeft, locksAtWall, phase }),
     drawCue: (roundId, leadSeconds) =>
       io.emit(SOCKET_EVENTS.drawCue, { roundId, leadSeconds }),
     drawResult: (roundId, diceA, diceB, startTile, landedTile, revealedSeed, commitHash) =>

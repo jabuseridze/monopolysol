@@ -74,11 +74,17 @@ function openSnapshot(
   nowMs: number
 ): RoundStateDTO {
   const locksAtMs = Number(round.locksAt) * 1000;
+  // `nowMs` is the caller's cluster-adjusted clock, so the difference against
+  // real time is the live cluster offset -- enough to express the deadline in
+  // the browser's own domain without threading the ClusterClock in here. The
+  // picking loop re-broadcasts a fresher value every tick.
+  const clusterOffsetMs = nowMs - Date.now();
   return {
     roundId,
     phase: "open",
     secondsLeft: Math.max(0, Math.ceil((locksAtMs - nowMs) / 1000)),
     locksAt: locksAtMs,
+    locksAtWall: locksAtMs - clusterOffsetMs,
     durationSec: Math.max(1, Number(round.locksAt - round.openedAt)),
     prizeLamports: Number(round.prizeLamports),
     numTiles,

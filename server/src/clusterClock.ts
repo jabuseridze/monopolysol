@@ -47,6 +47,21 @@ export class ClusterClock {
     return Date.now() + this.offsetMs;
   }
 
+  /**
+   * Convert a cluster-clock instant into this host's wall-clock domain.
+   *
+   * The browser can only compare against its own `Date.now()`, so a countdown
+   * given a raw cluster deadline drifts by however much the two clocks
+   * disagree. On a local validator that is a *rate* difference, not just an
+   * offset -- slots are produced faster than 400ms, so its `unix_timestamp`
+   * runs well ahead of real time and the gap widens as the round goes on.
+   * Re-broadcasting this value on every re-sync keeps the client's deadline
+   * converging on the truth instead of lurching toward it.
+   */
+  toWallMs(clusterMs: number): number {
+    return clusterMs - this.offsetMs;
+  }
+
   /** Block until the chain's own clock has reached `targetMs`. Call this
    * right before a tx whose on-chain constraint depends on cluster time. */
   async waitUntil(targetMs: number, pollMs = 1000): Promise<void> {

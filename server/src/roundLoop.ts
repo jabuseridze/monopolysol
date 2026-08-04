@@ -118,6 +118,7 @@ function emptySnapshot(): RoundStateDTO {
     phase: "idle",
     secondsLeft: 0,
     locksAt: 0,
+    locksAtWall: 0,
     durationSec: 0,
     prizeLamports: 0,
     numTiles: 40,

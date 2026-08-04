@@ -7,7 +7,12 @@ import { RoundStateDTO } from "@monopoly-sol/shared";
  */
 export interface Emitter {
   state: (s: RoundStateDTO) => void;
-  tick: (roundId: number, secondsLeft: number, phase: RoundStateDTO["phase"]) => void;
+  tick: (
+    roundId: number,
+    secondsLeft: number,
+    locksAtWall: number,
+    phase: RoundStateDTO["phase"]
+  ) => void;
   drawCue: (roundId: number, leadSeconds: number) => void;
   drawResult: (
     roundId: number,

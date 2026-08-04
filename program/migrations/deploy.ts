@@ -8,10 +8,14 @@ import { LAMPORTS_PER_SOL, SystemProgram } from "@solana/web3.js";
 
 const NUM_TILES = 40;
 const PRIZE_LAMPORTS = LAMPORTS_PER_SOL / 2; // 0.5 SOL
-// On-chain round_duration == the picking window. The coordinator adds the
-// draw-sequence afterward (now includes dice + walk choreography), so this
-// leaves more headroom than the tile-lottery era's 105s.
-const ROUND_DURATION = 95; // seconds
+// On-chain round_duration == the picking WINDOW, not the whole cycle: the
+// coordinator adds the draw sequence (12.3-16.1s of dice + walk + celebration)
+// on top. 100s of guessing therefore yields a ~116-120s round.
+//
+// There is no instruction to change this after `initialize` -- see lib.rs, which
+// exposes no config setter -- so the only way to retune it is a fresh chain.
+// Override for fast iteration: `ROUND_DURATION=15 anchor migrate`.
+const ROUND_DURATION = Number(process.env.ROUND_DURATION ?? 100); // seconds
 const INITIAL_FUNDING = 20 * LAMPORTS_PER_SOL;
 
 module.exports = async function (provider: anchor.AnchorProvider) {

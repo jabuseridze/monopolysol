@@ -78,7 +78,18 @@ export function GameProvider({ children }: { children: React.ReactNode }) {
     socket.on(SOCKET_EVENTS.tick, (t: TickDTO) =>
       setState((s) =>
         s.round && s.round.roundId === t.roundId
-          ? { ...s, round: { ...s.round, secondsLeft: t.secondsLeft, phase: t.phase } }
+          ? {
+              ...s,
+              round: {
+                ...s.round,
+                secondsLeft: t.secondsLeft,
+                // The refreshed deadline is the load-bearing field: `Countdown`
+                // counts down against this locally rather than echoing
+                // `secondsLeft`, which is measured on the cluster clock.
+                locksAtWall: t.locksAtWall,
+                phase: t.phase,
+              },
+            }
           : s
       )
     );

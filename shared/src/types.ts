@@ -13,8 +13,17 @@ export interface RoundStateDTO {
   phase: RoundPhase;
   /** Whole seconds until the guessing window closes (0 once locked). */
   secondsLeft: number;
-  /** Epoch ms when the guessing window closes. */
+  /** Epoch ms when the guessing window closes, on the *cluster* clock. */
   locksAt: number;
+  /**
+   * The same deadline translated into wall-clock epoch ms, which is the only
+   * domain a browser can compare against. **This is what the countdown must
+   * read** -- the cluster clock can run at a different *rate* from real time
+   * (markedly so on a local validator), so a client counting down against
+   * `locksAt` skips a block of seconds and then freezes short of zero.
+   * Re-sent on every server clock re-sync, so the estimate converges.
+   */
+  locksAtWall: number;
   /**
    * Whole seconds the guessing window lasts, from the chain's own
    * `locksAt - openedAt`. The client's ring clock needs a denominator, and
@@ -49,7 +58,12 @@ export interface RoundStateDTO {
 /** Per-second lightweight update to avoid resending the full snapshot. */
 export interface TickDTO {
   roundId: number;
+  /** Server's own view of the remaining seconds. The client displays its own
+   * figure derived from `locksAtWall`; this is kept for logging and as a
+   * fallback before the first tick carrying a deadline arrives. */
   secondsLeft: number;
+  /** Refreshed wall-clock deadline -- see `RoundStateDTO.locksAtWall`. */
+  locksAtWall: number;
   phase: RoundPhase;
 }
 

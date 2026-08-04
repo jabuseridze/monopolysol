@@ -24,14 +24,29 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 /** Tick loop for the picking window. Exits once the (cluster-adjusted) clock
  * reaches `locksAtMs`. Re-syncs the clock periodically so a long picking
  * window doesn't drift on a stale offset. */
+/** Once inside this many seconds of the lock, re-sync the cluster clock on the
+ * tighter cadence below. The wall-clock deadline the client counts down to is
+ * only as good as the offset it was derived from, and the last few seconds are
+ * exactly where an inaccurate deadline is visible. */
+const ENDGAME_SEC = 15;
+const CLOCK_SYNC_MS = 10_000;
+const CLOCK_SYNC_ENDGAME_MS = 2_000;
+
 export async function pickingPhase(ctx: LoopCtx, roundId: number, locksAtMs: number): Promise<void> {
   let cuedAlarm = false;
   let lastRefresh = 0;
   let lastClockSync = 0;
   while (ctx.clock.now() < locksAtMs) {
     const secondsLeft = Math.max(0, Math.ceil((locksAtMs - ctx.clock.now()) / 1000));
-    ctx.emit.tick(roundId, secondsLeft, "open");
-    ctx.setState({ secondsLeft });
+    // Hand the client an absolute deadline in its OWN clock domain rather
+    // than trusting it to count down from an integer. `secondsLeft` here is
+    // measured against the cluster clock, which can run at a different rate
+    // from wall time -- so this loop's own sense of "seconds remaining" jumps
+    // whenever the offset is re-synced, and a client echoing it would skip a
+    // block of seconds and then freeze short of zero.
+    const locksAtWall = ctx.clock.toWallMs(locksAtMs);
+    ctx.emit.tick(roundId, secondsLeft, locksAtWall, "open");
+    ctx.setState({ secondsLeft, locksAtWall });
 
     if (!cuedAlarm && secondsLeft <= ALARM_LEAD_SEC) {
       cuedAlarm = true;
@@ -42,13 +57,14 @@ export async function pickingPhase(ctx: LoopCtx, roundId: number, locksAtMs: num
       const { counts } = await ctx.chain.getPicks(roundId);
       ctx.setState({ guessCounts: counts });
     }
-    if (Date.now() - lastClockSync > 10000) {
+    const syncEvery = secondsLeft <= ENDGAME_SEC ? CLOCK_SYNC_ENDGAME_MS : CLOCK_SYNC_MS;
+    if (Date.now() - lastClockSync > syncEvery) {
       lastClockSync = Date.now();
       await ctx.clock.sync();
     }
     await sleep(1000);
   }
-  ctx.setState({ phase: "locked", secondsLeft: 0 });
+  ctx.setState({ phase: "locked", secondsLeft: 0, locksAtWall: Date.now() });
 }
 
 /** Dice sum + the wall-clock moment `drawResult` was emitted -- the caller

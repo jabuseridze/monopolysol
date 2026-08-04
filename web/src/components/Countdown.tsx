@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { lamportsToSol, RoundPhase } from "@monopoly-sol/shared";
 import { useGame } from "@/hooks/useGame";
 import { useDrawBeat } from "@/hooks/useDrawBeat";
@@ -37,11 +38,46 @@ const RING_CALM = "#c8e780";
 const RING_LOW = "#da9c77";
 const RING_URGENT = "#e8483c";
 
+/** Fast enough that the clock never visibly stalls, cheap enough to ignore --
+ * it only re-renders one small DOM node. */
+const CLOCK_TICK_MS = 250;
+
+/**
+ * Seconds remaining, counted down locally against the server's wall-clock
+ * deadline.
+ *
+ * The server also sends its own `secondsLeft`, but that figure is measured on
+ * the Solana cluster clock, which can run at a different *rate* from real time
+ * -- markedly so on a local validator, whose `unix_timestamp` outpaces wall
+ * time. Echoing it made the countdown skip a block of seconds at each of the
+ * server's clock re-syncs and then freeze several seconds short of zero, with
+ * the dice dropping while the clock still read 0:05. Counting down locally
+ * against an absolute deadline is smooth; the server's periodic refresh of
+ * that deadline nudges it, so it converges on the real lock instead of
+ * lurching toward it.
+ */
+function useSecondsLeft(locksAtWall: number | undefined, active: boolean): number {
+  const [secs, setSecs] = useState(0);
+
+  useEffect(() => {
+    if (!active || !locksAtWall) {
+      setSecs(0);
+      return;
+    }
+    const tick = () => setSecs(Math.max(0, Math.ceil((locksAtWall - Date.now()) / 1000)));
+    tick();
+    const id = setInterval(tick, CLOCK_TICK_MS);
+    return () => clearInterval(id);
+  }, [locksAtWall, active]);
+
+  return secs;
+}
+
 export function Countdown() {
   const { round, connected } = useGame();
   const beat = useDrawBeat();
   const phase = round?.phase ?? "idle";
-  const secs = round?.secondsLeft ?? 0;
+  const secs = useSecondsLeft(round?.locksAtWall, phase === "open");
   const prize = round ? lamportsToSol(round.prizeLamports) : 0;
   const mm = String(Math.floor(secs / 60)).padStart(1, "0");
   const ss = String(secs % 60).padStart(2, "0");
