@@ -5,6 +5,7 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useGame } from "@/hooks/useGame";
 import { useSubmitGuess } from "@/hooks/useSubmitGuess";
 import { useSelection } from "@/hooks/useSelection";
+import { useGameAudio } from "@/hooks/useGameAudio";
 import { audio } from "@/lib/audio";
 import { Scene } from "./Scene";
 import { BoardView } from "./viewTypes";
@@ -19,7 +20,12 @@ export function GameCanvas() {
   // Reset the local selection whenever a new round starts.
   useEffect(() => setSelectedSum(null), [roundId]);
 
-  // Audio cues driven by server events.
+  // The soundtrack: lobby bed between rounds, and the draw's cue sheet
+  // scheduled against the same beat constants the animation uses.
+  useGameAudio();
+
+  // Audio cues driven by server events. The draw sequence has its own fanfare
+  // for everyone; this is the extra flourish for the local winner only.
   useEffect(() => {
     if (drawCue) audio.alarm();
   }, [drawCue?.at]);
@@ -29,14 +35,13 @@ export function GameCanvas() {
     }
   }, [settled?.at]);
 
-  // Countdown blip is disabled for now (kept wired up so it's a one-line
-  // re-enable): uncomment the audio.blip() call below to bring it back.
+  // Woodblock tick through the final seconds of the guessing window.
   const lastBlip = useRef(0);
   useEffect(() => {
     const s = round?.secondsLeft ?? 99;
     if (round?.phase === "open" && s <= 5 && s > 0 && s !== lastBlip.current) {
       lastBlip.current = s;
-      // audio.blip();
+      audio.blip();
     }
   }, [round?.secondsLeft, round?.phase]);
 

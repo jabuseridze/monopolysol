@@ -1,12 +1,17 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { audio } from "@/lib/audio";
 
 export function MuteButton() {
-  // Seeded from the audio manager rather than hardcoded, so the icon reflects
-  // reality — audio currently defaults to muted (see lib/audio.ts).
-  const [muted, setMuted] = useState(audio.muted);
+  // Must start at the *unmuted* default so the server-rendered icon matches
+  // the client's first paint. `audio.muted` reads a localStorage preference,
+  // which doesn't exist during SSR -- seeding state from it directly renders
+  // a different glyph on each side and fails hydration for the whole page.
+  const [muted, setMuted] = useState(false);
+
+  // Adopt the stored preference once mounted, when localStorage is readable.
+  useEffect(() => setMuted(audio.muted), []);
 
   const toggle = () => {
     const next = !muted;
