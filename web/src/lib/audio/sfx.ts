@@ -37,28 +37,32 @@ export function drone(c: Ctx, at: number, dur: number): void {
   tone(c, { at, dur, freq: note(-36), type: "sine", gain: 0.14, attack: dur * 0.5 });
 }
 
-/** The tension build across the roll: a filtered noise sweep plus a rising
- * tone. `dur` is the whole roll beat, so this stretches with the beat sheet
- * rather than being a fixed-length clip. */
-export function riser(c: Ctx, at: number, dur: number): void {
-  burst(c, { at, dur, freq: 300, toFreq: 4200, q: 3, gain: 0.16, type: "bandpass" });
-  tone(c, { at, dur, freq: note(-17), toFreq: note(4), type: "sawtooth", gain: 0.09, attack: dur * 0.8 });
+/** One stick on a snare: a bright noise crack over a little drum body. */
+function snareHit(c: Ctx, at: number, gain: number): void {
+  burst(c, { at, dur: 0.045, freq: 2100 + Math.random() * 700, q: 1.1, gain });
+  burst(c, { at, dur: 0.06, freq: 240, q: 0.9, gain: gain * 0.5, type: "lowpass" });
 }
 
-/** Dice tumbling: a scatter of short wooden clicks whose density ramps up
- * across the beat, so it reads as "still rolling" rather than a loop. */
-export function rattle(c: Ctx, at: number, dur: number): void {
-  const hits = Math.max(8, Math.round(dur * 14));
-  for (let i = 0; i < hits; i++) {
-    // Quadratic spacing: sparse at first, frantic by the end.
-    const p = Math.pow(i / hits, 0.7);
-    burst(c, {
-      at: at + p * dur,
-      dur: 0.035,
-      freq: 900 + Math.random() * 1400,
-      q: 5 + Math.random() * 4,
-      gain: 0.06 + 0.06 * (i / hits),
-    });
+/**
+ * Drum roll under the dice, decelerating across the beat.
+ *
+ * The interval between sticks grows from `FAST` to `SLOW`, tracking the dice
+ * visibly losing momentum on screen (`Dice.tsx` decays its spin quadratically
+ * over the same window). This replaces an earlier tonal riser -- a rising pad
+ * read as *music* over the roll, which isn't what the moment wants.
+ *
+ * Written as a while-loop over elapsed time rather than a fixed hit count,
+ * because the spacing is what's being controlled; the count falls out of it.
+ */
+export function drumRoll(c: Ctx, at: number, dur: number): void {
+  const FAST = 0.03;
+  const SLOW = 0.19;
+  let t = 0;
+  while (t < dur) {
+    const p = t / dur;
+    // Swells slightly as it slows, so the final sticks land with weight.
+    snareHit(c, at + t, 0.07 + 0.07 * p);
+    t += FAST + (SLOW - FAST) * Math.pow(p, 1.5);
   }
 }
 

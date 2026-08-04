@@ -9,8 +9,7 @@
    outside the box. */
 
 .tile-thumb {
-  display: grid;
-  place-items: center;
+  position: relative;
   overflow: hidden;
   border-radius: 6px;
   border: 1.5px solid rgba(40, 8, 88, 0.35);
@@ -18,7 +17,16 @@
   flex: none;
 }
 
+/* Pinned to the box's centre rather than laid out inside it. A side tile's
+   sprite is WIDER than its upright box (they swap axes when rotated), and an
+   oversized grid item gets aligned to the start edge instead of centred -- so
+   the rotation pivoted off-centre and the tile landed clipped and shifted.
+   Only Slippage Tax showed it: it's the one thumbnail that is both rotated
+   and non-square. Centring on the box explicitly is exact for every side. */
 .tile-thumb-img {
+  position: absolute;
+  left: 50%;
+  top: 50%;
   display: block;
   background-repeat: no-repeat;
 }

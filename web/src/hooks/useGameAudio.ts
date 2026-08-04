@@ -72,12 +72,12 @@ export function useGameAudio(): void {
 
     cue(0, (t) => sfx.drone(c, t, BEAT_ANTICIPATION_MS / 1000));
 
-    // The build runs from the drop right up to the first die landing, then
-    // stops dead -- the gap before the second die is the tension beat and has
-    // to be genuinely silent, not merely quieter.
+    // A drum roll, decelerating with the dice -- no music over the roll. It
+    // runs from the drop right up to the first die landing and then stops
+    // dead: the gap before the second die is the tension beat and has to be
+    // genuinely silent, not merely quieter.
     const buildMs = BEAT_SETTLE_AT_MS + DIE_A_LOCK_MS - BEAT_ROLL_AT_MS;
-    cue(BEAT_ROLL_AT_MS, (t) => sfx.riser(c, t, buildMs / 1000));
-    cue(BEAT_ROLL_AT_MS, (t) => sfx.rattle(c, t, buildMs / 1000));
+    cue(BEAT_ROLL_AT_MS, (t) => sfx.drumRoll(c, t, buildMs / 1000));
 
     cue(BEAT_SETTLE_AT_MS + DIE_A_LOCK_MS, (t) => sfx.dieLock(c, t, false));
     cue(BEAT_SETTLE_AT_MS + DIE_B_LOCK_MS, (t) => sfx.dieLock(c, t, true));

@@ -6,7 +6,14 @@ import { useWallet } from "@solana/wallet-adapter-react";
 import { useGame } from "@/hooks/useGame";
 import { Confetti } from "./Confetti";
 
-const VISIBLE_MS = 9000;
+/**
+ * How long the result stays up. The show/hide timers below are the sole owner
+ * of that: this used to also close the instant the next round opened, which
+ * the coordinator does only ~600ms after the choreography ends -- so the
+ * announcement flashed up and vanished before it could be read. Covering the
+ * first ~2.4s of a 100-second guessing window costs nothing by comparison.
+ */
+const VISIBLE_MS = 3000;
 
 export function ResultsModal() {
   const { round, settled, drawResult } = useGame();
@@ -16,13 +23,12 @@ export function ResultsModal() {
   const settledAt = settled?.at ?? null;
   const sameRound = settled != null && drawResult != null && drawResult.roundId === settled.roundId;
 
-  // Never let a finished round's result sit over the next round's board --
-  // it dims the whole scene and covers the guess pads while players are
-  // trying to use them.
-  const stale = settled != null && round != null && round.roundId !== settled.roundId;
-  useEffect(() => {
-    if (stale) setOpen(false);
-  }, [stale]);
+  // A result older than the round currently in flight is only shown if its own
+  // window hasn't elapsed -- the timers below decide that. What this still
+  // guards is a client that connects holding a `settled` from a round it never
+  // watched, where the timers were never armed.
+  const stale =
+    settled != null && round != null && round.roundId !== settled.roundId && !sameRound;
 
   useEffect(() => {
     if (!settled) return;

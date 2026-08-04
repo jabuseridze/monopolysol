@@ -76,7 +76,10 @@ export function TileThumb({ index, height }: Props) {
           backgroundImage: "url(/board/board-art.png)",
           backgroundSize: `${FILE_PX * scale}px ${FILE_PX * scale}px`,
           backgroundPosition: `${-cx * scale}px ${-cy * scale}px`,
-          transform: `rotate(${deg}deg)`,
+          // The translate pairs with `left/top: 50%` in the stylesheet to put
+          // the sprite's centre exactly on the box's centre, which is also the
+          // point the rotation pivots around.
+          transform: `translate(-50%, -50%) rotate(${deg}deg)`,
         }}
       />
     </span>
