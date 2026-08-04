@@ -5,7 +5,7 @@ import { useFrame, useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { computeDrawBeat } from "./DrawDirector";
 import { desiredPose } from "./cameraKeyframes";
-import { BEAT_SETTLE_AT_MS, DIE_A_LOCK_MS, DIE_B_LOCK_MS } from "@monopoly-sol/shared";
+import { DIE_A_LOCK_MS, DIE_B_LOCK_MS } from "@monopoly-sol/shared";
 
 interface Props {
   /** `drawResult.at` for the round in flight; `null` when there's nothing
@@ -24,8 +24,13 @@ interface ControlsLike {
 }
 
 const CHASE_RATE = 2.4; // higher = snappier chase toward the desired pose
-const LOCK_A_MS = BEAT_SETTLE_AT_MS + DIE_A_LOCK_MS;
-const LOCK_B_MS = BEAT_SETTLE_AT_MS + DIE_B_LOCK_MS;
+// Beat-RELATIVE, matching the units of `DrawBeatState.tBeat` that
+// `desiredPose` compares them against. These were previously offset by
+// BEAT_SETTLE_AT_MS, i.e. absolute timeline positions, which put them ~5s
+// away from any value tBeat can take (0..BEAT_SETTLE_MS) -- so the die-lock
+// camera shake could never fire and Beat 3 landed with no impact at all.
+const LOCK_A_MS = DIE_A_LOCK_MS;
+const LOCK_B_MS = DIE_B_LOCK_MS;
 
 /**
  * Full cinematic camera rig for the draw sequence. Chases a per-beat

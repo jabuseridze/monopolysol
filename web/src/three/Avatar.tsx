@@ -35,6 +35,13 @@ interface Props {
   /** Tile to idle-stand on between rounds (also the walk's arrival tile,
    * since the server advances this the moment a round enters "drawing"). */
   avatarTile: number;
+  /** True once the round has entered its draw. The server advances
+   * `avatarTile` to the LANDING tile in the same breath as it flips the
+   * phase, and that broadcast is a separate socket message from the one
+   * carrying the walk -- so in the gap between them `avatarTile` is already
+   * the answer while `walk` is still null. Holding position through that
+   * gap keeps the avatar from teleporting to its destination early. */
+  drawing: boolean;
   walk: AvatarWalk | null;
   /** Master choreography clock -- `drawResult.at`. The walk beat starts at
    * `BEAT_WALK_AT_MS` past it, after the dice have rolled and settled. */
@@ -55,8 +62,11 @@ type AnimState = "idle" | "walking" | "cheer";
  * `landedTile` (never recomputed locally) and celebrates with a one-shot
  * Cheer -- on *every* landing, since the landing is the payoff moment of the
  * round regardless of which tile it happens to be. */
-export function Avatar({ avatarTile, walk, drawResultAt, landedTile }: Props) {
+export function Avatar({ avatarTile, walk, drawing, drawResultAt, landedTile }: Props) {
   const root = useRef<THREE.Group>(null);
+  // Last tile we rested on with no draw in flight -- used to hold position if
+  // the phase flips to "drawing" before the walk data lands.
+  const lastIdleTile = useRef(avatarTile);
   const { scene, actions, names } = useKayKitModel(AVATAR_MODEL_URL);
   const stateRef = useRef<AnimState>("idle");
   const current = useRef<THREE.AnimationAction | null>(null);
@@ -117,7 +127,19 @@ export function Avatar({ avatarTile, walk, drawResultAt, landedTile }: Props) {
     // elapsed: rest exactly on the server's tile (never local modular
     // arithmetic), so a stuttering client or refresh self-heals.
     const preWalk = walk != null && elapsed < 0;
-    const restTile = preWalk ? walk!.startTile : walk != null ? landedTile ?? avatarTile : avatarTile;
+    let restTile: number;
+    if (preWalk) {
+      restTile = walk!.startTile;
+    } else if (walk != null) {
+      restTile = landedTile ?? avatarTile;
+    } else if (drawing) {
+      // Draw has started but the walk hasn't reached us yet: `avatarTile` is
+      // already the destination, so trust the last pre-draw position instead.
+      restTile = lastIdleTile.current;
+    } else {
+      restTile = avatarTile;
+      lastIdleTile.current = avatarTile;
+    }
     const rest = placeTile(restTile);
     g.position.set(rest.x, GROUND_Y, rest.z);
 

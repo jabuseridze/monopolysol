@@ -5,7 +5,14 @@ import { Canvas } from "@react-three/fiber";
 import { Environment, Lightformer, OrbitControls, SoftShadows } from "@react-three/drei";
 import { Bloom, EffectComposer, N8AO, SMAA, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
-import { BEAT_SUM_AT_MS, BEAT_WALK_AT_MS, walkDurationMs } from "@monopoly-sol/shared";
+import {
+  BEAT_SETTLE_AT_MS,
+  BEAT_SUM_AT_MS,
+  BEAT_WALK_AT_MS,
+  DIE_A_LOCK_MS,
+  DIE_B_LOCK_MS,
+  walkDurationMs,
+} from "@monopoly-sol/shared";
 import { Avatar } from "./Avatar";
 import { Board } from "./Board";
 import { CinematicCamera } from "./CinematicCamera";
@@ -32,6 +39,10 @@ import { BoardView } from "./viewTypes";
 function padsVisible(phase: BoardView["phase"]): boolean {
   return phase !== "idle";
 }
+
+/** Half the dice gap -- where each die comes to rest either side of centre,
+ * and therefore where its impact ring belongs. Mirrors `Dice.tsx`'s GAP/2. */
+const DIE_IMPACT_X = 1.05;
 
 export function Scene({ view }: { view: BoardView }) {
   // Every choreography timestamp derives from the one master clock, so the
@@ -106,6 +117,7 @@ export function Scene({ view }: { view: BoardView }) {
         <Avatar
           avatarTile={view.avatarTile}
           walk={view.walk}
+          drawing={view.phase === "drawing" || view.phase === "settled"}
           drawResultAt={at}
           landedTile={view.landedTile}
         />
@@ -119,6 +131,26 @@ export function Scene({ view }: { view: BoardView }) {
           the raw draw timestamp made the winning number pop up during the
           anticipation beat -- a full second before the dice even appear. */}
       <SumFlare sum={view.winningSum} triggerAt={at != null ? at + BEAT_SUM_AT_MS : null} />
+
+      {/* Each die gets its own impact ring as it locks. Beat 3 is the
+          held-breath moment -- one die down, a beat of silence, then the
+          second -- and without a visible hit on the board it read as the
+          dice simply stopping. The two rings are deliberately staggered by
+          the same gap as the locks themselves. */}
+      <Shockwave
+        triggerAt={at != null ? at + BEAT_SETTLE_AT_MS + DIE_A_LOCK_MS : null}
+        position={[-DIE_IMPACT_X, TILE_HEIGHT + 0.02, 0]}
+        color="#ffffff"
+        maxRadius={2.6}
+        durationMs={620}
+      />
+      <Shockwave
+        triggerAt={at != null ? at + BEAT_SETTLE_AT_MS + DIE_B_LOCK_MS : null}
+        position={[DIE_IMPACT_X, TILE_HEIGHT + 0.02, 0]}
+        color="#ffffff"
+        maxRadius={3.2}
+        durationMs={720}
+      />
 
       <Hologram phase={view.phase} landedTile={view.landedTile} landedAt={landedAt} />
       {landedPos && (

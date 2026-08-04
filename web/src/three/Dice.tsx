@@ -34,6 +34,9 @@ const REST_Y = TILE_HEIGHT + SIZE / 2;
 const SPIN_TURNS = 7;
 const BOUNCES = 3;
 const BOUNCE_DECAY = 0.42;
+/** Arbitrary tilt held during the anticipation beat, so the dice show a
+ * meaningless orientation rather than their committed faces before the roll. */
+const PRE_ROLL_ANGLE = 0.9;
 
 /**
  * Two procedurally-built cubes (never a sourced model -- we need to own the
@@ -85,8 +88,13 @@ function placeDie(
   const landed = landingQuaternion(value);
 
   if (t <= BEAT_ROLL_AT_MS) {
+    // Wait out the anticipation beat in an ARBITRARY orientation, never the
+    // landed one. The dice are already mounted and visible up here, and
+    // OrbitControls allows a near-top-down view (minPolarAngle 0.15), so
+    // parking them on their true faces would show the result to anyone
+    // looking down at the board a second and a half before the roll starts.
     group.position.set(x, DROP_FROM, 0);
-    group.quaternion.copy(landed);
+    group.quaternion.setFromAxisAngle(axis, PRE_ROLL_ANGLE);
     return;
   }
   if (t >= lockAt) {
