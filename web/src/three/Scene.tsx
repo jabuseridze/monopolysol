@@ -5,7 +5,7 @@ import { Canvas } from "@react-three/fiber";
 import { Environment, Lightformer, OrbitControls, SoftShadows } from "@react-three/drei";
 import { Bloom, EffectComposer, N8AO, SMAA, Vignette } from "@react-three/postprocessing";
 import * as THREE from "three";
-import { BEAT_WALK_AT_MS, walkDurationMs } from "@monopoly-sol/shared";
+import { BEAT_SUM_AT_MS, BEAT_WALK_AT_MS, walkDurationMs } from "@monopoly-sol/shared";
 import { Avatar } from "./Avatar";
 import { Board } from "./Board";
 import { CinematicCamera } from "./CinematicCamera";
@@ -114,7 +114,11 @@ export function Scene({ view }: { view: BoardView }) {
       {/* Dice roll at the board's centre -- that airspace is empty, the
           MONOPOLY wordmark under it is painted into the board texture. */}
       <Dice dice={view.dice} drawResultAt={at} />
-      <SumFlare sum={view.winningSum} triggerAt={at} />
+      {/* Fires at the START OF THE SUM BEAT, not at `at`. SumFlare measures
+          its own progress as `(now - triggerAt) / BEAT_SUM_MS`, so handing it
+          the raw draw timestamp made the winning number pop up during the
+          anticipation beat -- a full second before the dice even appear. */}
+      <SumFlare sum={view.winningSum} triggerAt={at != null ? at + BEAT_SUM_AT_MS : null} />
 
       <Hologram phase={view.phase} landedTile={view.landedTile} landedAt={landedAt} />
       {landedPos && (
