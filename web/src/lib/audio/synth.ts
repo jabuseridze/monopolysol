@@ -10,6 +10,7 @@
  */
 
 import { engine } from "./engine";
+import { reverbBus } from "./reverb";
 
 let noiseBuf: AudioBuffer | null = null;
 
@@ -28,6 +29,8 @@ function noise(ctx: AudioContext): AudioBuffer {
 export interface Ctx {
   ctx: AudioContext;
   out: AudioNode;
+  /** Reverb send. Voices connect here in parallel with `out`. */
+  verb: AudioNode;
 }
 
 /** Resolves the shared context + the SFX bus, or null when audio is
@@ -35,7 +38,25 @@ export interface Ctx {
 export function sfxCtx(): Ctx | null {
   const ctx = engine.ensure();
   if (!ctx || engine.muted || !engine.sfx) return null;
-  return { ctx, out: engine.sfx };
+  return { ctx, out: engine.sfx, verb: reverbBus(ctx, engine.sfx) };
+}
+
+/** Same graph, but routed through a panner -- lets one cue place its voices
+ * across the stereo field without every primitive growing a `pan` option. */
+export function panned(c: Ctx, pan: number): Ctx {
+  const p = c.ctx.createStereoPanner();
+  p.pan.value = pan;
+  p.connect(c.out);
+  return { ctx: c.ctx, out: p, verb: c.verb };
+}
+
+/** Wires a voice's output to the dry bus, and optionally to the room. */
+function route(c: Ctx, g: GainNode, send?: number): void {
+  g.connect(c.out);
+  if (!send) return;
+  const s = c.ctx.createGain();
+  s.gain.value = send;
+  g.connect(s).connect(c.verb);
 }
 
 interface BurstOpts {
@@ -48,6 +69,8 @@ interface BurstOpts {
   /** Optional end frequency -- sweeps the filter across the burst. */
   toFreq?: number;
   type?: BiquadFilterType;
+  /** 0-1 amount sent to the room. */
+  send?: number;
 }
 
 /** Filtered noise burst: the workhorse for dice, impacts and footsteps.
@@ -71,7 +94,8 @@ export function burst(c: Ctx, o: BurstOpts): void {
   g.gain.exponentialRampToValueAtTime(peak, o.at + Math.min(0.008, o.dur * 0.2));
   g.gain.exponentialRampToValueAtTime(0.0001, o.at + o.dur);
 
-  src.connect(filter).connect(g).connect(out);
+  src.connect(filter).connect(g);
+  route(c, g, o.send);
   src.start(o.at, offset, o.dur + 0.05);
   src.stop(o.at + o.dur + 0.05);
 }
@@ -85,6 +109,8 @@ interface ToneOpts {
   gain?: number;
   /** Attack in seconds. Longer values give pads/drones their swell. */
   attack?: number;
+  /** 0-1 amount sent to the room. */
+  send?: number;
 }
 
 /** Pitched voice with a real envelope, optionally gliding in pitch. */
@@ -102,7 +128,8 @@ export function tone(c: Ctx, o: ToneOpts): void {
   g.gain.exponentialRampToValueAtTime(peak, o.at + attack);
   g.gain.exponentialRampToValueAtTime(0.0001, o.at + o.dur);
 
-  osc.connect(g).connect(out);
+  osc.connect(g);
+  route(c, g, o.send);
   osc.start(o.at);
   osc.stop(o.at + o.dur + 0.02);
 }

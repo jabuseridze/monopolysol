@@ -4,7 +4,7 @@
  * why that matters.
  */
 
-import { burst, chord, note, sfxCtx, tone, type Ctx } from "./synth";
+import { burst, chord, note, panned, sfxCtx, tone, type Ctx } from "./synth";
 
 /** Click when a guess is committed. */
 export function guessPlaced(at?: number): void {
@@ -37,10 +37,38 @@ export function drone(c: Ctx, at: number, dur: number): void {
   tone(c, { at, dur, freq: note(-36), type: "sine", gain: 0.14, attack: dur * 0.5 });
 }
 
-/** One stick on a snare: a bright noise crack over a little drum body. */
-function snareHit(c: Ctx, at: number, gain: number): void {
-  burst(c, { at, dur: 0.045, freq: 2100 + Math.random() * 700, q: 1.1, gain });
-  burst(c, { at, dur: 0.06, freq: 240, q: 0.9, gain: gain * 0.5, type: "lowpass" });
+/**
+ * One stick, built the way a real drum actually sounds: three layers, not one.
+ *
+ * The first attempt was a single dry noise crack, which read as a click track
+ * rather than a drum. What was missing:
+ *
+ * - **A pitched body.** A struck membrane rings, and its pitch bends *down* as
+ *   the head relaxes. That downward sweep is most of what makes a drum sound
+ *   like a drum rather than static.
+ * - **A separate transient.** The initial stick contact is a much shorter,
+ *   brighter event than the body; fusing them into one envelope smears it.
+ * - **A room.** Every voice sends to the reverb (`reverb.ts`); dry percussion
+ *   always sounds synthetic.
+ *
+ * `tune` shifts the whole hit slightly per stroke so a roll doesn't machine-gun
+ * one identical sample.
+ */
+function drumHit(c: Ctx, at: number, gain: number, tune: number): void {
+  // Stick contact: very short, bright, barely any room.
+  burst(c, { at, dur: 0.018, freq: 3400 * tune, q: 0.7, gain: gain * 0.55, send: 0.12 });
+  // Body: the membrane ringing down. This is the layer that was missing.
+  tone(c, {
+    at,
+    dur: 0.19,
+    freq: 210 * tune,
+    toFreq: 78 * tune,
+    type: "triangle",
+    gain: gain * 1.15,
+    send: 0.3,
+  });
+  // Snare wires rattling under the head -- a noise tail, not a crack.
+  burst(c, { at, dur: 0.1, freq: 1700 * tune, toFreq: 900, q: 0.9, gain: gain * 0.6, send: 0.35 });
 }
 
 /**
@@ -48,30 +76,47 @@ function snareHit(c: Ctx, at: number, gain: number): void {
  *
  * The interval between sticks grows from `FAST` to `SLOW`, tracking the dice
  * visibly losing momentum on screen (`Dice.tsx` decays its spin quadratically
- * over the same window). This replaces an earlier tonal riser -- a rising pad
- * read as *music* over the roll, which isn't what the moment wants.
+ * over the same window). Deliberately not a tonal riser -- a rising pad read
+ * as *music* over the roll, which isn't what the moment wants.
  *
  * Written as a while-loop over elapsed time rather than a fixed hit count,
  * because the spacing is what's being controlled; the count falls out of it.
+ * Strokes alternate across the stereo field like a real drummer's hands, and
+ * each is detuned a little, so the roll has movement instead of repeating one
+ * identical hit sixty times.
  */
 export function drumRoll(c: Ctx, at: number, dur: number): void {
-  const FAST = 0.03;
-  const SLOW = 0.19;
+  const FAST = 0.036;
+  const SLOW = 0.2;
   let t = 0;
+  let hand = 0;
   while (t < dur) {
     const p = t / dur;
-    // Swells slightly as it slows, so the final sticks land with weight.
-    snareHit(c, at + t, 0.07 + 0.07 * p);
+    const stroke = panned(c, hand % 2 === 0 ? -0.35 : 0.35);
+    // Swells as it slows, so the last strokes land with weight. The leading
+    // hand hits slightly harder, as it does in a real roll.
+    const accent = hand % 2 === 0 ? 1 : 0.82;
+    drumHit(stroke, at + t, (0.07 + 0.1 * p) * accent, 0.94 + Math.random() * 0.12);
     t += FAST + (SLOW - FAST) * Math.pow(p, 1.5);
+    hand++;
   }
 }
 
 /** A die coming to rest. `heavy` is the second one -- bigger, since it's the
- * one that completes the sum. */
+ * one that completes the sum. Sent hard to the room so the roll's ending
+ * lands in the same space the drums were playing in. */
 export function dieLock(c: Ctx, at: number, heavy: boolean): void {
   const g = heavy ? 0.42 : 0.3;
-  burst(c, { at, dur: 0.09, freq: heavy ? 700 : 950, q: 3, gain: g });
-  tone(c, { at, dur: heavy ? 0.3 : 0.22, freq: heavy ? 90 : 120, toFreq: 55, type: "sine", gain: g });
+  burst(c, { at, dur: 0.09, freq: heavy ? 700 : 950, q: 3, gain: g, send: 0.4 });
+  tone(c, {
+    at,
+    dur: heavy ? 0.3 : 0.22,
+    freq: heavy ? 90 : 120,
+    toFreq: 55,
+    type: "sine",
+    gain: g,
+    send: 0.45,
+  });
 }
 
 /** Bright stab when the sum is revealed. */
