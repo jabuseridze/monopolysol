@@ -1,0 +1,148 @@
+/* Rules panel: the slide-out card and its grid of real board-tile cards.
+   Split from `hud.css` purely for file size; the colour tokens all live in
+   `globals.css`. */
+
+/* --- Rules panel -------------------------------------------------------- */
+/* Both the trigger and the card are direct children of `.overlay`; the
+   `.overlay > *` rule is what makes them clickable at all. Right column,
+   under the wallet bar: the left column already stacks the mute button on
+   the pick panel, and a card tall enough to read would cover the guess
+   controls. */
+
+.rules-trigger {
+  position: absolute;
+  right: 16px;
+  top: 96px;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  /* The chance chip printed on the board, reproduced. */
+  background: var(--chance);
+  color: #fff;
+  font: inherit;
+  font-size: 24px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 4px 0 var(--chance-deep), 0 8px 18px rgba(40, 8, 88, 0.28);
+  transition: transform 0.08s ease, box-shadow 0.08s ease, filter 0.15s ease;
+}
+
+.rules-trigger:hover {
+  filter: brightness(1.06);
+}
+.rules-trigger:active {
+  transform: translateY(3px);
+  box-shadow: 0 1px 0 var(--chance-deep), 0 4px 10px rgba(40, 8, 88, 0.28);
+}
+
+.rules-card {
+  position: absolute;
+  right: 16px;
+  top: 148px;
+  width: 344px;
+  max-height: calc(100vh - 164px);
+  overflow-y: auto;
+  padding: 14px;
+  font-size: 12.5px;
+  line-height: 1.4;
+  /* Slides out from behind the trigger and fades. `visibility` is what keeps
+     the hidden card from swallowing clicks aimed at the board beneath it. */
+  transform: translateX(14px);
+  opacity: 0;
+  visibility: hidden;
+  transition: transform 0.22s ease, opacity 0.22s ease, visibility 0.22s;
+}
+
+.rules-card.open {
+  transform: translateX(0);
+  opacity: 1;
+  visibility: visible;
+}
+
+.rules-eyebrow {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--panel-border);
+  opacity: 0.7;
+  margin-bottom: 8px;
+}
+
+.rules-eyebrow.boost {
+  color: var(--good);
+  opacity: 1;
+}
+.rules-eyebrow.penalty {
+  color: var(--danger);
+  opacity: 1;
+}
+
+.rules-lede {
+  margin: 0 0 14px;
+}
+
+.rules-group + .rules-group {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1.5px dashed rgba(40, 8, 88, 0.18);
+}
+
+.rules-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+}
+
+.rule-card {
+  display: grid;
+  justify-items: center;
+  text-align: center;
+  gap: 1px;
+  padding: 7px 6px;
+  border-radius: 12px;
+  background: var(--panel-warm);
+  border: 1.5px solid rgba(40, 8, 88, 0.14);
+}
+
+.rule-card.boost {
+  box-shadow: inset 0 -3px 0 rgba(47, 158, 68, 0.35);
+}
+.rule-card.penalty {
+  box-shadow: inset 0 -3px 0 rgba(232, 72, 60, 0.35);
+}
+
+.rule-name {
+  margin-top: 5px;
+  font-size: 11.5px;
+  line-height: 1.2;
+}
+
+/* Shares the name's line rather than taking one of its own -- five cards
+   only fit the panel without scrolling if each stays three lines tall. */
+.rule-tiles {
+  font-size: 9.5px;
+  font-weight: 600;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.rule-detail {
+  margin-top: 2px;
+  font-size: 10.5px;
+  line-height: 1.25;
+}
+
+.rules-note {
+  margin: 10px 0 0;
+  padding-top: 9px;
+  border-top: 1.5px dashed rgba(40, 8, 88, 0.18);
+  color: var(--muted);
+  font-size: 11.5px;
+}

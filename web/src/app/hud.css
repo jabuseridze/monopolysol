@@ -1,0 +1,116 @@
+/* Tile thumbnails and the ring clock. Split out of `globals.css`, which keeps
+   the reset, the colour tokens and the base `.panel`; the rules panel lives in
+   `rules.css`. Every colour here comes from a token defined in `globals.css`,
+   all of them sampled from the board art. */
+
+/* --- Tile thumbnails ---------------------------------------------------- */
+/* A crop of the real board texture. The inner element is the sprite; the
+   outer one clips it, because un-rotating a side tile spins its corners
+   outside the box. */
+
+.tile-thumb {
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 6px;
+  border: 1.5px solid rgba(40, 8, 88, 0.35);
+  box-shadow: 0 2px 0 rgba(40, 8, 88, 0.18);
+  flex: none;
+}
+
+.tile-thumb-img {
+  display: block;
+  background-repeat: no-repeat;
+}
+
+/* --- Countdown / ring clock --------------------------------------------- */
+
+.clock {
+  position: absolute;
+  top: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 14px 24px 12px;
+  text-align: center;
+  min-width: 236px;
+}
+
+.clock-eyebrow {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--panel-border);
+  opacity: 0.72;
+  margin-bottom: 8px;
+}
+
+.clock-ring {
+  position: relative;
+  width: 132px;
+  height: 132px;
+  margin: 0 auto;
+}
+
+.clock-ring svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Start the drain at 12 o'clock and run clockwise. */
+  transform: rotate(-90deg);
+}
+
+.clock-ring-track {
+  stroke: #e4e7d8;
+}
+
+/* The only animated property: dashoffset. Stroke colour steps rather than
+   tweens, so the "you are nearly out of time" change reads as a state, not
+   as a gradual drift the eye filters out. */
+.clock-ring-fill {
+  transition: stroke-dashoffset 0.9s linear, stroke 0.4s ease;
+  stroke-linecap: round;
+}
+
+.clock-readout {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 38px;
+  font-weight: 800;
+  line-height: 1;
+  color: var(--panel-border);
+}
+
+.clock-readout.urgent {
+  color: var(--danger);
+}
+
+.clock-readout.roll {
+  font-size: 30px;
+  letter-spacing: 0.04em;
+  color: var(--chance);
+}
+
+.clock-prize {
+  margin-top: 10px;
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.coin-dot {
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: inset 0 -2px 0 rgba(40, 8, 88, 0.22);
+  flex: none;
+}
+
+.clock-round {
+  color: var(--muted);
+}

@@ -18,12 +18,13 @@ const LABEL_WINNER_COLOR = "#3a2b00";
 
 const CHIP_RADIUS = 0.34;
 
-/** Badge colours for pads that happen to sit on an effect tile. Gold reads
- * as "good" and matches the HUD accent; the rose reads as "careful" without
- * colliding with the board art's red property stripes. Both are pushed past
- * 1.0 so the bloom pass picks them out the way it does the pad rims. */
-const BADGE_BOOST = new THREE.Color("#f5d90a").multiplyScalar(1.5);
-const BADGE_PENALTY = new THREE.Color("#ff5c7a").multiplyScalar(1.5);
+/** Badge colours for pads that happen to sit on an effect tile, taken from
+ * the board art itself so the rules panel's legend reads straight onto the
+ * board: the coin gold stamped beside every price, and the Get Rugged /
+ * GO arrow red. Both are pushed past 1.0 so the bloom pass picks them out
+ * the way it does the pad rims. */
+const BADGE_BOOST = new THREE.Color("#e4bb47").multiplyScalar(1.6);
+const BADGE_PENALTY = new THREE.Color("#e8483c").multiplyScalar(1.6);
 const BADGE_RADIUS = 0.13;
 
 interface Props {

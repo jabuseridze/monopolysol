@@ -1,13 +1,27 @@
+/* Every colour below is sampled from `public/board/board-art.png` -- the HUD
+   is meant to look like a piece of the board rather than chrome bolted on
+   over it. Do not introduce a colour that isn't already printed on the board. */
 :root {
   --bg-0: #0b1020;
   --bg-1: #131a33;
-  --accent: #f5d90a;
-  --accent-soft: rgba(245, 217, 10, 0.15);
-  --text: #eef2ff;
-  --muted: #9aa4c8;
+
+  /* Board stock: the cream of an edge tile face, and of a corner tile. */
+  --panel: #f4f7ec;
+  --panel-warm: #f5f2e1;
+  --panel-border: #280858; /* the MONOPOLY plaque purple */
+
+  --text: #280858;
+  --muted: #6f6a86;
+  --accent: #e4bb47; /* the coin gold stamped beside every price */
+  --accent-soft: rgba(228, 187, 71, 0.18);
+  --chance: #f97216; /* the orange "?" chip */
+  --chance-deep: #c85a0c;
+  --crate: #7b3bea;
+  --lime: #cdf537;
+  --board-green: #c8e780;
+  --track: #da9c77;
+  --danger: #e8483c; /* Get Rugged / GO arrow red */
   --good: #2f9e44;
-  --panel: rgba(15, 20, 40, 0.72);
-  --panel-border: rgba(255, 255, 255, 0.08);
 }
 
 * {
@@ -41,40 +55,50 @@ body {
   pointer-events: auto;
 }
 
+/* A title-deed card lying on the table. Opaque on purpose -- the old
+   `backdrop-filter: blur` existed to make dark glass legible over the board
+   and only muddies a solid surface. */
 .panel {
   background: var(--panel);
-  border: 1px solid var(--panel-border);
-  border-radius: 14px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+  border: 2px solid var(--panel-border);
+  border-radius: 16px;
+  color: var(--text);
+  box-shadow: 0 6px 0 rgba(40, 8, 88, 0.18), 0 14px 34px rgba(40, 8, 88, 0.22);
 }
 
 button.btn {
   font: inherit;
-  color: #0b1020;
+  color: #2a1c00;
   background: var(--accent);
   border: none;
   border-radius: 10px;
   padding: 8px 14px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.08s ease, filter 0.15s ease;
+  box-shadow: 0 3px 0 #b98f21;
+  transition: transform 0.08s ease, filter 0.15s ease, box-shadow 0.08s ease;
 }
 
 button.btn:hover {
-  filter: brightness(1.08);
+  filter: brightness(1.06);
 }
 button.btn:active {
-  transform: translateY(1px);
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #b98f21;
 }
 button.btn.ghost {
   background: transparent;
   color: var(--text);
-  border: 1px solid var(--panel-border);
+  border: 2px solid rgba(40, 8, 88, 0.25);
+  box-shadow: none;
+}
+button.btn.ghost:active {
+  transform: translateY(1px);
 }
 button.btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
+  box-shadow: none;
 }
 
 .mono {
@@ -91,110 +115,6 @@ button.btn:disabled {
   letter-spacing: 0.1em;
   text-transform: uppercase;
   font-size: 13px;
-}
-
-/* --- Rules panel ------------------------------------------------------- */
-/* Both the trigger and the card are direct children of `.overlay`; the
-   `.overlay > *` rule above is what makes them clickable at all. */
-
-/* Right column, under the wallet bar: the left column is already the mute
-   button on top of the pick panel, and a rules card tall enough to be worth
-   reading would cover the guess controls. */
-.rules-trigger {
-  position: absolute;
-  right: 16px;
-  top: 96px;
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.rules-card {
-  position: absolute;
-  right: 16px;
-  top: 152px;
-  width: 320px;
-  max-height: calc(100vh - 184px);
-  overflow-y: auto;
-  padding: 16px;
-  font-size: 13px;
-  line-height: 1.45;
-  /* Slides out from behind the trigger and fades. `visibility` is what keeps
-     the hidden card from swallowing clicks aimed at the board beneath it. */
-  transform: translateX(14px);
-  opacity: 0;
-  visibility: hidden;
-  transition: transform 0.22s ease, opacity 0.22s ease, visibility 0.22s;
-}
-
-.rules-card.open {
-  transform: translateX(0);
-  opacity: 1;
-  visibility: visible;
-}
-
-.rules-eyebrow {
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.12em;
-  font-size: 10px;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.rules-lede {
-  margin: 0 0 16px;
-  color: var(--text);
-}
-
-.rules-list {
-  list-style: none;
-  margin: 0 0 16px;
-  padding: 0;
-  display: grid;
-  gap: 10px;
-}
-
-.rules-list li {
-  display: flex;
-  gap: 10px;
-  align-items: flex-start;
-}
-
-.rules-swatch {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  margin-top: 4px;
-  border-radius: 3px;
-}
-.rules-swatch.boost {
-  background: var(--accent);
-  box-shadow: 0 0 10px var(--accent-soft);
-}
-.rules-swatch.penalty {
-  background: #ff5c7a;
-  box-shadow: 0 0 10px rgba(255, 92, 122, 0.25);
-}
-
-.rules-tiles {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.rules-detail {
-  margin-top: 2px;
-}
-
-.rules-note {
-  margin: 0;
-  padding-top: 12px;
-  border-top: 1px solid var(--panel-border);
-  color: var(--muted);
-  font-size: 12px;
 }
 
 .confetti-piece {

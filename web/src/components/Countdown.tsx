@@ -26,6 +26,17 @@ const BEAT_LABEL: Record<string, string> = {
   celebration: "Landed!",
 };
 
+const RADIUS = 58;
+const STROKE = 10;
+const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
+
+/** Colour steps for the draining ring, all sampled from the board art: the
+ * centre field's green while there's time, the running track's salmon as it
+ * runs down, the GO arrow's red at the wire. */
+const RING_CALM = "#c8e780";
+const RING_LOW = "#da9c77";
+const RING_URGENT = "#e8483c";
+
 export function Countdown() {
   const { round, connected } = useGame();
   const beat = useDrawBeat();
@@ -38,22 +49,48 @@ export function Countdown() {
 
   const inDraw = beat !== "idle" && beat !== "done";
   const label = inDraw ? BEAT_LABEL[beat] ?? PHASE_LABEL[phase] : PHASE_LABEL[phase];
-  const readout = phase === "open" ? `${mm}:${ss}` : inDraw ? "ROLL!" : "--:--";
+
+  // The ring only means anything while guessing is open. Through the draw it
+  // holds full rather than snapping to empty, so it reads as "time's up, watch
+  // this" instead of as a second thing counting down alongside the dice.
+  const duration = round?.durationSec ?? 0;
+  const fraction = phase === "open" && duration > 0 ? Math.min(1, Math.max(0, secs / duration)) : 1;
+  const ringColor = urgent ? RING_URGENT : fraction <= 0.2 ? RING_LOW : RING_CALM;
 
   return (
-    <div
-      className="panel"
-      style={{ position: "absolute", top: 16, left: "50%", transform: "translateX(-50%)", padding: "12px 22px", textAlign: "center", minWidth: 260 }}
-    >
-      <div style={{ fontSize: 12, letterSpacing: "0.14em", textTransform: "uppercase", color: "var(--muted)" }}>
-        {connected ? label : "Connecting to game..."}
+    <div className="panel clock">
+      <div className="clock-eyebrow">{connected ? label : "Connecting to game..."}</div>
+
+      <div className="clock-ring">
+        <svg viewBox="0 0 132 132" aria-hidden>
+          <circle className="clock-ring-track" cx="66" cy="66" r={RADIUS} fill="none" strokeWidth={STROKE} />
+          <circle
+            className="clock-ring-fill"
+            cx="66"
+            cy="66"
+            r={RADIUS}
+            fill="none"
+            stroke={ringColor}
+            strokeWidth={STROKE}
+            strokeDasharray={CIRCUMFERENCE}
+            strokeDashoffset={CIRCUMFERENCE * (1 - fraction)}
+          />
+        </svg>
+        <div
+          className={`clock-readout mono${urgent ? " urgent" : ""}${inDraw ? " roll" : ""}`}
+          role="timer"
+          aria-live="off"
+        >
+          {phase === "open" ? `${mm}:${ss}` : inDraw ? "ROLL!" : "--:--"}
+        </div>
       </div>
-      <div className="mono" style={{ fontSize: 46, fontWeight: 800, color: urgent ? "#ff6b6b" : "var(--accent)", lineHeight: 1.05 }}>
-        {readout}
-      </div>
-      <div style={{ fontSize: 14 }}>
-        Prize pool <span className="mono" style={{ fontWeight: 700 }}>{prize.toFixed(2)} SOL</span>
-        {round ? <span style={{ color: "var(--muted)" }}> - round #{round.roundId}</span> : null}
+
+      <div className="clock-prize">
+        <span className="coin-dot" aria-hidden />
+        <span>
+          Prize pool <strong className="mono">{prize.toFixed(2)} SOL</strong>
+        </span>
+        {round ? <span className="clock-round">round #{round.roundId}</span> : null}
       </div>
     </div>
   );

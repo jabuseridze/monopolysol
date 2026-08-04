@@ -123,4 +123,4 @@ export const PENALTY_OVERRIDES_GO_NOTE = `Penalties override the GO bonus: land 
 
 /** One-line statement of the core loop, for the top of the rules panel. */
 export const CORE_LOOP_NOTE =
-  "Two dice roll each round and the avatar walks forward by their sum. Guess the tile it lands on -- everyone who guesses right splits the prize.";
+  "Two dice roll each round and the avatar walks forward by their sum. Guess where it lands -- correct guesses split the prize.";

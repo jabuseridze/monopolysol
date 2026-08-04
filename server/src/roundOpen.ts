@@ -79,6 +79,7 @@ function openSnapshot(
     phase: "open",
     secondsLeft: Math.max(0, Math.ceil((locksAtMs - nowMs) / 1000)),
     locksAt: locksAtMs,
+    durationSec: Math.max(1, Number(round.locksAt - round.openedAt)),
     prizeLamports: Number(round.prizeLamports),
     numTiles,
     guessCounts: {},

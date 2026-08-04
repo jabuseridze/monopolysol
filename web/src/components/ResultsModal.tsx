@@ -70,11 +70,13 @@ export function ResultsModal() {
             Dice rolled {dice.diceA} + {dice.diceB} = {winningSum}
           </div>
         )}
-        <div style={{ fontSize: 26, fontWeight: 800, color: "var(--accent)", margin: "6px 0" }}>
+        <div style={{ fontSize: 26, fontWeight: 800, color: "var(--panel-border)", margin: "6px 0" }}>
           Landed on {tile?.name ?? `Tile ${settled.landedTile}`}
         </div>
         {settled.winners.length === 0 ? (
-          <div style={{ color: "var(--muted)" }}>No winners - prize rolls into the next round.</div>
+          // No rollover: `settle.rs` dropped the accumulation branch in the
+          // dice-walk pivot, so an unclaimed prize simply stays in the treasury.
+          <div style={{ color: "var(--muted)" }}>Nobody guessed it - the prize stays in the treasury.</div>
         ) : (
           <div style={{ fontSize: 15 }}>
             {settled.winners.length} winner{settled.winners.length > 1 ? "s" : ""} guessed{" "}
@@ -95,7 +97,7 @@ export function ResultsModal() {
             href={`https://explorer.solana.com/tx/${settled.txSignature}?cluster=devnet`}
             target="_blank"
             rel="noreferrer"
-            style={{ display: "inline-block", marginTop: 12, color: "#8ecae6", fontSize: 12 }}
+            style={{ display: "inline-block", marginTop: 12, color: "var(--crate)", fontSize: 12 }}
           >
             View payout on Explorer
           </a>

@@ -28,7 +28,7 @@ export function WalletBar() {
       )}
       <WalletMultiButton />
       {error && (
-        <div style={{ position: "absolute", top: 62, right: 0, fontSize: 11, color: "#ffb3b3", width: 220, textAlign: "right" }}>
+        <div style={{ position: "absolute", top: 62, right: 0, fontSize: 11, color: "var(--danger)", width: 220, textAlign: "right" }}>
           {error}
         </div>
       )}

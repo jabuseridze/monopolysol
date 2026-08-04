@@ -15,6 +15,13 @@ export interface RoundStateDTO {
   secondsLeft: number;
   /** Epoch ms when the guessing window closes. */
   locksAt: number;
+  /**
+   * Whole seconds the guessing window lasts, from the chain's own
+   * `locksAt - openedAt`. The client's ring clock needs a denominator, and
+   * deriving one from the largest `secondsLeft` it happens to have seen would
+   * start the ring wrong for anyone who joins mid-round.
+   */
+  durationSec: number;
   prizeLamports: number;
   numTiles: number;
   /** guessSum (2-12) -> number of wallets currently backing it. */
