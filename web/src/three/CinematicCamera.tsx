@@ -31,6 +31,12 @@ const CHASE_RATE = 2.4; // higher = snappier chase toward the desired pose
 // camera shake could never fire and Beat 3 landed with no impact at all.
 const LOCK_A_MS = DIE_A_LOCK_MS;
 const LOCK_B_MS = DIE_B_LOCK_MS;
+/** How long the camera is allowed to spend easing back to its resting pose
+ * once the sequence ends, before control is handed back regardless. A cap is
+ * needed because the damped chase approaches the target asymptotically. */
+const HOME_MAX_MS = 1400;
+/** Close enough to the resting pose to stop, in world units. */
+const HOME_EPSILON = 0.15;
 
 /**
  * Full cinematic camera rig for the draw sequence. Chases a per-beat
@@ -55,6 +61,7 @@ export function CinematicCamera({ drawResultAt, walk, landedTile }: Props) {
   const active = useRef(false);
   const cancelled = useRef(false);
   const shakeClock = useRef(0);
+  const homingMs = useRef(0);
   const preludePos = useRef(new THREE.Vector3());
   const preludeTarget = useRef(new THREE.Vector3());
 
@@ -93,14 +100,41 @@ export function CinematicCamera({ drawResultAt, walk, landedTile }: Props) {
       if (inSequence && !active.current && !cancelled.current) {
         active.current = true;
         controls.enabled = false;
+        homingMs.current = 0;
         preludePos.current.copy(camera.position);
         preludeTarget.current.copy(controls.target);
       }
 
       if (!inSequence || cancelled.current) {
         if (active.current) {
-          controls.enabled = true;
-          active.current = false;
+          // The user grabbed the camera: hand it straight back, wherever it is.
+          // Fighting them to finish a move is worse than an abrupt cut.
+          if (cancelled.current) {
+            controls.enabled = true;
+            active.current = false;
+          } else {
+            // The sequence ended. The final beat eases toward the resting pose,
+            // but the damped chase always lags it -- so at "done" the camera is
+            // still short of home, and simply restoring control here strands the
+            // player on the celebration's close-up with the board cropped and
+            // half the guess pads off screen. Keep flying until it arrives.
+            homingMs.current += dt * 1000;
+            const k = 1 - Math.pow(0.001, dt * CHASE_RATE);
+            camera.position.lerp(preludePos.current, k);
+            controls.target.lerp(preludeTarget.current, k);
+            controls.update();
+            const arrived =
+              camera.position.distanceTo(preludePos.current) < HOME_EPSILON &&
+              controls.target.distanceTo(preludeTarget.current) < HOME_EPSILON;
+            if (arrived || homingMs.current > HOME_MAX_MS) {
+              camera.position.copy(preludePos.current);
+              controls.target.copy(preludeTarget.current);
+              controls.update();
+              controls.enabled = true;
+              active.current = false;
+            }
+            return;
+          }
         }
         if (!inSequence) cancelled.current = false; // rearm for the next round
         return;

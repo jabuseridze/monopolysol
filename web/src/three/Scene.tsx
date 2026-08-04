@@ -19,6 +19,7 @@ import { CinematicCamera } from "./CinematicCamera";
 import { CoinBurst } from "./CoinBurst";
 import { Dice } from "./Dice";
 import { Figurines } from "./Figurines";
+import { FitCamera } from "./FitCamera";
 import { GuessPads } from "./GuessPads";
 import { Hologram } from "./Hologram";
 import { Shockwave } from "./Shockwave";
@@ -178,11 +179,13 @@ export function Scene({ view }: { view: BoardView }) {
         enablePan={false}
         enableDamping
         target={[0, 0, 0]}
-        minDistance={BOARD_SIDE * 0.85}
-        maxDistance={BOARD_SIDE * 2.2}
         minPolarAngle={0.15}
         maxPolarAngle={Math.PI / 2.4}
       />
+      {/* Must sit AFTER OrbitControls so `useThree(s => s.controls)` has
+          resolved -- it owns the zoom limits, which have to bracket whatever
+          distance actually frames the board at this window size. */}
+      <FitCamera />
 
       <EffectComposer multisampling={0}>
         <N8AO aoRadius={1.6} intensity={3.2} distanceFalloff={1.0} color="#1a1f2e" halfRes />

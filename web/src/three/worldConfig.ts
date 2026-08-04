@@ -32,6 +32,16 @@ export interface PatchSpec {
 
 const T = "#fff6e8";
 
+/**
+ * The camera looks down the +X/+Z diagonal, so anything standing in that
+ * quadrant is between it and the board's GO corner. Three buildings used to
+ * live there; at the old close framing they sat outside the frustum, but once
+ * `FitCamera` pulled back far enough to show the whole board, their roofs
+ * loomed across the near corner as a big featureless slab. They've been moved
+ * around to the far and side arcs, where they read as skyline instead.
+ *
+ * Rule of thumb when adding scenery: keep `x > 6 && z > 6` clear.
+ */
 export const BUILDINGS: BuildingSpec[] = [
   { x: -16, z: -14, w: 5, d: 5, h: 8, color: "#f2c6c6", roof: "#c9736b", trim: T, style: 1 },
   { x: -10, z: -18, w: 4, d: 4, h: 5, color: "#c6d8f2", roof: "#6b8ec9", trim: T, style: 0 },
@@ -41,10 +51,10 @@ export const BUILDINGS: BuildingSpec[] = [
   { x: 19, z: -3, w: 5, d: 5, h: 7, color: "#f2d9b0", roof: "#c98f4b", trim: T, style: 2 },
   { x: -17, z: 13, w: 5, d: 5, h: 6.5, color: "#c6d8f2", roof: "#6b8ec9", trim: T, style: 0 },
   { x: -11, z: 18, w: 4.5, d: 4.5, h: 5.2, color: "#f2c6c6", roof: "#c9736b", trim: T, style: 1 },
-  { x: 17, z: 14, w: 5, d: 5.5, h: 8.5, color: "#f7e3b0", roof: "#c9a24b", trim: T, style: 1 },
-  { x: 11, z: 19, w: 4, d: 4, h: 4.8, color: "#cfeccf", roof: "#6bab74", trim: T, style: 0 },
+  { x: -6, z: -25, w: 5, d: 5.5, h: 8.5, color: "#f7e3b0", roof: "#c9a24b", trim: T, style: 1 },
+  { x: 5, z: -27, w: 4, d: 4, h: 4.8, color: "#cfeccf", roof: "#6bab74", trim: T, style: 0 },
   { x: -20, z: 4, w: 3.5, d: 3.5, h: 11, color: "#dde8f5", roof: "#5a7aaa", trim: T, style: 1 },
-  { x: 21, z: 7, w: 4, d: 4.5, h: 6, color: "#f8d4c8", roof: "#d4785c", trim: T, style: 2 },
+  { x: 26, z: -12, w: 4, d: 4.5, h: 6, color: "#f8d4c8", roof: "#d4785c", trim: T, style: 2 },
 ];
 
 export const TREES: TreeSpec[] = [
@@ -57,7 +67,7 @@ export const TREES: TreeSpec[] = [
   { x: 21, z: 6, scale: 1.2, leaf: "#3d9b4a" },
   { x: -21, z: 4, scale: 1.1, leaf: "#5cbc5f" },
   { x: -15, z: -20, scale: 0.95, leaf: "#2f8a40" },
-  { x: 15, z: 20, scale: 1.05, leaf: "#3d9b4a" },
+  { x: -20, z: -16, scale: 1.05, leaf: "#3d9b4a" },
 ];
 
 /** Darker grass patches for ground variation. */
