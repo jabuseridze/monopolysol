@@ -100,7 +100,9 @@ export function Scene({ view }: { view: BoardView }) {
       </group>
 
       <Suspense fallback={null}>
-        <Figurines count={5} />
+        {/* Starts at lock rather than at the draw, so the crowd is already
+            clear of the middle by the time the dice come down. */}
+        <Figurines count={5} clearCenter={view.phase === "locked" || at != null} />
         <Avatar
           avatarTile={view.avatarTile}
           walk={view.walk}

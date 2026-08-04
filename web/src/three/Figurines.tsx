@@ -4,8 +4,15 @@ import { useMemo } from "react";
 import { Character } from "./Character";
 import { CHARACTER_MODELS } from "./assets";
 
+interface Props {
+  count?: number;
+  /** Passed through so the crowd vacates the board's centre while the dice
+   * are landing there. */
+  clearCenter?: boolean;
+}
+
 /** Spawns KayKit adventurers running around the center track. */
-export function Figurines({ count = 5 }: { count?: number }) {
+export function Figurines({ count = 5, clearCenter = false }: Props) {
   const chars = useMemo(
     () =>
       Array.from({ length: count }, (_, i) => ({
@@ -21,7 +28,14 @@ export function Figurines({ count = 5 }: { count?: number }) {
   return (
     <group>
       {chars.map((c, i) => (
-        <Character key={i} url={c.url} speed={c.speed} seed={c.seed} scale={c.scale} />
+        <Character
+          key={i}
+          url={c.url}
+          speed={c.speed}
+          seed={c.seed}
+          scale={c.scale}
+          clearCenter={clearCenter}
+        />
       ))}
     </group>
   );
