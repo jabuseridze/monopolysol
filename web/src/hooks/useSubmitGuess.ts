@@ -1,48 +1,75 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { Transaction } from "@solana/web3.js";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
-import { buildSubmitGuessIx } from "@/lib/anchorClient";
 import { audio } from "@/lib/audio";
+import { useGame } from "./useGame";
+import { useIdentity } from "./useIdentity";
+import { useTokenGate } from "./useTokenGate";
 
 /**
- * Matches only a duplicate-guess rejection -- the `pick` PDA's `init`
- * constraint fails with a message containing "already in use" when a wallet
- * tries to guess twice in the same round. Deliberately narrow: the old regex
- * (`/already in use|custom program error/i`) also matched any generic
- * `custom program error` -- including an unrelated failure like an unknown-
- * instruction error -- and mislabeled it as "you already guessed," showing
- * players a confident lie instead of the real error.
+ * Ask the coordinator to place this round's guess for the pasted address.
+ *
+ * Nothing is signed here and no transaction is built. The player typed an
+ * address rather than connecting a wallet, so they hold no key -- the
+ * coordinator submits on their behalf and pays the fee and the pick account's
+ * rent. The chain still verifies the address holds the game token, so this
+ * path cannot let a non-holder in.
+ *
+ * Failure messages come straight from the server (`guessIntake.ts`), which
+ * already phrases them for a player; re-wording them here would only let the
+ * two drift apart.
  */
-const ALREADY_GUESSED_RE = /already in use/i;
+const RETRYABLE_RE = /didn't respond|not connected/i;
+const MAX_TRIES = 3;
+const BACKOFF_MS = 500;
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export function useSubmitGuess(roundId: number | null) {
-  const { connection } = useConnection();
-  const { publicKey, sendTransaction } = useWallet();
+  const { ask } = useGame();
+  const identity = useIdentity();
+  const gate = useTokenGate();
   const [pending, setPending] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const submitGuess = useCallback(
     async (guessSum: number) => {
-      if (!publicKey || roundId == null) return;
+      if (roundId == null) return;
+      if (!identity.address) {
+        setError("Paste your wallet address first.");
+        return;
+      }
+      // Mirrors the chain's own check so a non-holder is told why before the
+      // coordinator spends a fee finding out. Not the security boundary.
+      if (!gate.allowed) {
+        setError("This address doesn't hold the game token.");
+        return;
+      }
+
       setError(null);
       setPending(true);
       try {
-        const ix = buildSubmitGuessIx(publicKey, roundId, guessSum);
-        const tx = new Transaction().add(ix);
-        const sig = await sendTransaction(tx, connection);
-        await connection.confirmTransaction(sig, "confirmed");
-        audio.pick();
-      } catch (e: any) {
-        const msg = e?.message ?? String(e);
-        setError(ALREADY_GUESSED_RE.test(msg) ? "You already guessed this round." : msg);
+        for (let attempt = 0; ; attempt++) {
+          const res = await ask("client:guess", { address: identity.address, sum: guessSum });
+          if (res.ok) {
+            audio.pick();
+            return;
+          }
+          // Only transport failures are worth repeating. A rejection the
+          // coordinator reasoned about -- gate, duplicate, rate limit -- will
+          // say the same thing however many times it is asked.
+          if (attempt >= MAX_TRIES - 1 || !RETRYABLE_RE.test(res.reason)) {
+            setError(res.reason);
+            return;
+          }
+          await sleep(BACKOFF_MS * 2 ** attempt);
+        }
       } finally {
         setPending(false);
       }
     },
-    [publicKey, roundId, connection, sendTransaction]
+    [ask, roundId, identity.address, gate.allowed]
   );
 
-  return { submitGuess, pending, error };
+  return { submitGuess, pending, error, gate };
 }

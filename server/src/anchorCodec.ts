@@ -108,8 +108,11 @@ export function decodeRound(data: Buffer): RoundData {
 }
 
 /** Byte offsets into a PlayerPick account (after the 8-byte discriminator).
- * Total account size (with discriminator): 8 + 32 + 8 + 2 + 1 + 1 = 52 bytes
- * -- matches `chain.ts`'s `dataSize: 52` getProgramAccounts filter. */
+ * Total account size (with discriminator):
+ * 8 + 32 + 8 + 2 + 1 + 1 + 1 = 53 bytes -- must match `chain.ts`'s
+ * `dataSize: 53` getProgramAccounts filter. The trailing byte is `counted`,
+ * appended when `tally` moved winner counting on-chain; appending kept every
+ * offset below valid. */
 export const PICK_OFFSETS = {
   player: 8,
   roundId: 8 + 32,

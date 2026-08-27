@@ -1,18 +1,25 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useGame } from "@/hooks/useGame";
+import { useIdentity } from "@/hooks/useIdentity";
 import { useSubmitGuess } from "@/hooks/useSubmitGuess";
 import { useSelection } from "@/hooks/useSelection";
 import { useGameAudio } from "@/hooks/useGameAudio";
 import { audio } from "@/lib/audio";
+import { NoWebGL } from "@/components/NoWebGL";
 import { Scene } from "./Scene";
+import { webglAvailable } from "./webglSupport";
 import { BoardView } from "./viewTypes";
 
 export function GameCanvas() {
   const { round, drawCue, drawResult, settled } = useGame();
-  const { publicKey } = useWallet();
+  // Probed once, lazily, on mount. This component is `ssr: false`, so there is
+  // no server pass to disagree with. It must be a hook rather than a bare call
+  // so the early return below cannot change the hook order between renders.
+  const [webgl] = useState(webglAvailable);
+  // Read-only: drives whose win is celebrated, not who may guess.
+  const identity = useIdentity();
   const roundId = round?.roundId ?? null;
   const { submitGuess } = useSubmitGuess(roundId);
   const { selected: selectedSum, setSelected: setSelectedSum } = useSelection();
@@ -30,10 +37,10 @@ export function GameCanvas() {
     if (drawCue) audio.alarm();
   }, [drawCue?.at]);
   useEffect(() => {
-    if (settled && publicKey && settled.winners.includes(publicKey.toBase58())) {
+    if (settled && identity.address && settled.winners.includes(identity.address)) {
       audio.win();
     }
-  }, [settled?.at]);
+  }, [settled?.at, identity.address]);
 
   // Woodblock tick through the final seconds of the guessing window.
   const lastBlip = useRef(0);
@@ -73,15 +80,20 @@ export function GameCanvas() {
         settled != null &&
         round != null &&
         settled.roundId === round.roundId &&
-        publicKey != null &&
-        settled.winners.includes(publicKey.toBase58()),
+        identity.address != null &&
+        settled.winners.includes(identity.address),
       onGuess: (sum: number) => {
         audio.unlock();
         setSelectedSum(sum);
         submitGuess(sum);
       },
     };
-  }, [round, selectedSum, drawResult, settled, publicKey, submitGuess]);
+  }, [round, selectedSum, drawResult, settled, identity.address, submitGuess]);
+
+  // After every hook, never before: three.js throws inside the `WebGLRenderer`
+  // constructor, so `Scene` must not be reached at all on a browser that
+  // cannot supply a context.
+  if (!webgl) return <NoWebGL />;
 
   return <Scene view={view} />;
 }

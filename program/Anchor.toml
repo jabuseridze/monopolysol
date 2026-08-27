@@ -19,4 +19,14 @@ cluster = "Localnet"
 wallet = "~/.config/solana/id.json"
 
 [scripts]
-test = "ts-mocha -p ./tsconfig.json -t 1000000 tests/**/*.ts"
+# Files are listed explicitly rather than globbed. `tests/**/*.ts` runs them in
+# alphabetical order, which is an accident, not a decision -- and these suites
+# share one on-chain config, one treasury and one avatar, so order is load
+# bearing. Listing them also keeps `helpers.ts` / `roundOrchestration.ts` (plain
+# modules, no `describe`) out of the run.
+#
+# `monopoly.gate.ts` MUST stay last: it arms the token gate and opens rounds it
+# never settles. Running it in the middle left the treasury and the round chain
+# in a state the later suites did not expect, and they failed with errors that
+# pointed at their own code rather than at the real cause.
+test = "ts-mocha -p ./tsconfig.json -t 1000000 tests/monopoly.errors.ts tests/monopoly.ts tests/monopoly.walk.ts tests/monopoly.gate.ts"

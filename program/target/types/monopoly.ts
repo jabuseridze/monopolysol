@@ -10,56 +10,161 @@ export type Monopoly = {
     "name": "monopoly",
     "version": "0.1.0",
     "spec": "0.1.0",
-    "description": "On-chain program for the Monopoly-on-Solana game (provably-fair rounds). Hand-written IDL: Anchor's own idl-build compilation step is broken in this environment (borsh trait-version conflict inherent to anchor-lang 0.30.1 + a current solana-program release; reproduced on a vanilla anchor init scaffold, not caused by this program's code). The deployable program binary itself compiles cleanly via `anchor build --no-idl`. Regenerate this file by hand whenever instructions/accounts change until upstream is fixed or anchor-lang is major-version-bumped."
+    "description": "On-chain program for the Monopoly-on-Solana game (provably-fair rounds)"
   },
   "instructions": [
     {
-      "name": "initialize",
+      "name": "closePick",
+      "docs": [
+        "Authority reclaims a settled round's pick account and its rent. Refuses",
+        "to close a winner that has not been paid."
+      ],
       "discriminator": [
-        175,
-        175,
-        109,
-        31,
-        13,
-        152,
-        155,
-        237
+        177,
+        71,
+        108,
+        97,
+        57,
+        61,
+        187,
+        253
       ],
       "accounts": [
         {
-          "name": "authority",
+          "name": "payer",
+          "docs": [
+            "Receives the reclaimed rent. Authority-only: the rent came from the",
+            "coordinator, so it goes back there, and nobody else gets to decide when",
+            "a pick disappears."
+          ],
           "writable": true,
           "signer": true
         },
         {
           "name": "config",
-          "writable": true
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
-          "name": "treasury",
-          "writable": true
+          "name": "round",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "round"
+              }
+            ]
+          }
         },
         {
-          "name": "systemProgram"
+          "name": "pick",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  105,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "round"
+              },
+              {
+                "kind": "account",
+                "path": "pick.player",
+                "account": "playerPick"
+              }
+            ]
+          }
         }
       ],
-      "args": [
+      "args": []
+    },
+    {
+      "name": "expireRound",
+      "docs": [
+        "Permissionless: write off a round the authority never revealed, so its",
+        "pick accounts stop being unclosable. Moves no lamports."
+      ],
+      "discriminator": [
+        238,
+        222,
+        71,
+        141,
+        104,
+        222,
+        76,
+        248
+      ],
+      "accounts": [
         {
-          "name": "prizeLamports",
-          "type": "u64"
+          "name": "caller",
+          "docs": [
+            "Pays the fee. Anyone."
+          ],
+          "signer": true
         },
         {
-          "name": "numTiles",
-          "type": "u16"
-        },
-        {
-          "name": "roundDuration",
-          "type": "u32"
+          "name": "round",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "round"
+              }
+            ]
+          }
         }
-      ]
+      ],
+      "args": []
     },
     {
       "name": "fundTreasury",
+      "docs": [
+        "Deposit house SOL into the treasury (anyone may fund)."
+      ],
       "discriminator": [
         71,
         154,
@@ -78,10 +183,28 @@ export type Monopoly = {
         },
         {
           "name": "treasury",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
         },
         {
-          "name": "systemProgram"
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -92,7 +215,91 @@ export type Monopoly = {
       ]
     },
     {
+      "name": "initialize",
+      "docs": [
+        "One-time setup of the global config + treasury vault."
+      ],
+      "discriminator": [
+        175,
+        175,
+        109,
+        31,
+        13,
+        152,
+        155,
+        237
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        }
+      ],
+      "args": [
+        {
+          "name": "prizeLamports",
+          "type": "u64"
+        },
+        {
+          "name": "numTiles",
+          "type": "u16"
+        },
+        {
+          "name": "roundDuration",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "openRound",
+      "docs": [
+        "Authority opens a new round, committing keccak256(seed)."
+      ],
       "discriminator": [
         66,
         235,
@@ -111,17 +318,50 @@ export type Monopoly = {
         },
         {
           "name": "config",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
-          "name": "treasury"
+          "name": "treasury",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "round",
           "writable": true
         },
         {
-          "name": "systemProgram"
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
         }
       ],
       "args": [
@@ -137,47 +377,130 @@ export type Monopoly = {
       ]
     },
     {
-      "name": "submitGuess",
+      "name": "payout",
+      "docs": [
+        "Pay a single winning pick its equal share from the treasury. Callable",
+        "by anyone -- see `payout.rs` for why that is safe."
+      ],
       "discriminator": [
-        61,
-        124,
-        32,
-        227,
-        64,
-        198,
-        252,
-        3
+        149,
+        140,
+        194,
+        236,
+        174,
+        189,
+        6,
+        239
       ],
       "accounts": [
         {
-          "name": "player",
-          "writable": true,
+          "name": "payer",
+          "docs": [
+            "Pays the transaction fee. Usually the coordinator, sometimes the",
+            "winner themselves. Intentionally unconstrained -- see the note above."
+          ],
           "signer": true
         },
         {
-          "name": "config"
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "round",
-          "writable": true
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "pick",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  105,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "round"
+              },
+              {
+                "kind": "account",
+                "path": "pick.player",
+                "account": "playerPick"
+              }
+            ]
+          }
         },
         {
-          "name": "systemProgram"
+          "name": "winner",
+          "writable": true
         }
       ],
-      "args": [
-        {
-          "name": "guess",
-          "type": "u16"
-        }
-      ]
+      "args": []
     },
     {
       "name": "revealAndDraw",
+      "docs": [
+        "Authority reveals the seed after lock; program derives the winning tile."
+      ],
       "discriminator": [
         19,
         131,
@@ -195,11 +518,45 @@ export type Monopoly = {
         },
         {
           "name": "config",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "round",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "round"
+              }
+            ]
+          }
         }
       ],
       "args": [
@@ -215,7 +572,110 @@ export type Monopoly = {
       ]
     },
     {
+      "name": "setGate",
+      "docs": [
+        "Authority arms, retargets, or disables the token gate on `submit_guess`.",
+        "`Pubkey::default()` disables it."
+      ],
+      "discriminator": [
+        160,
+        18,
+        221,
+        241,
+        119,
+        196,
+        121,
+        6
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "mint",
+          "type": "pubkey"
+        }
+      ]
+    },
+    {
+      "name": "setParams",
+      "docs": [
+        "Authority retunes the guessing window and base prize without wiping the",
+        "chain. Takes effect from the next round to open."
+      ],
+      "discriminator": [
+        27,
+        234,
+        178,
+        52,
+        147,
+        2,
+        187,
+        141
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        }
+      ],
+      "args": [
+        {
+          "name": "prizeLamports",
+          "type": "u64"
+        },
+        {
+          "name": "roundDuration",
+          "type": "u32"
+        }
+      ]
+    },
+    {
       "name": "settle",
+      "docs": [
+        "Finalise a round. Takes no winner count -- `tally` derived it."
+      ],
       "discriminator": [
         175,
         42,
@@ -233,31 +693,200 @@ export type Monopoly = {
         },
         {
           "name": "config",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
           "name": "round",
-          "writable": true
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "round"
+              }
+            ]
+          }
+        }
+      ],
+      "args": []
+    },
+    {
+      "name": "submitGuess",
+      "docs": [
+        "A player submits a dice-sum guess for the current round (one guess per wallet)."
+      ],
+      "discriminator": [
+        61,
+        124,
+        32,
+        227,
+        64,
+        198,
+        252,
+        3
+      ],
+      "accounts": [
+        {
+          "name": "payer",
+          "docs": [
+            "The coordinator. Signs and funds the pick PDA on the player's behalf.",
+            "",
+            "Constrained to the authority, and that constraint is load-bearing: the",
+            "player no longer signs, so without it *anyone* could create a pick for",
+            "*any* address directly against the program, and no amount of server-side",
+            "rate limiting could stop them. Funnelling submissions through the",
+            "coordinator makes its limits the real ones."
+          ],
+          "writable": true,
+          "signer": true
+        },
+        {
+          "name": "player",
+          "docs": [
+            "that is the whole point of walletless play -- so nothing here may be",
+            "inferred from its presence. It is used only as a PDA seed and as",
+            "`pick.player` (which is what pins the eventual payout), and its claim to",
+            "hold the game token is verified independently by `token_gate::enforce`,",
+            "which reads the owner field out of the token account's own bytes."
+          ]
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "round",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "round"
+              }
+            ]
+          }
+        },
+        {
+          "name": "pick",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  112,
+                  105,
+                  99,
+                  107
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "round"
+              },
+              {
+                "kind": "account",
+                "path": "player"
+              }
+            ]
+          }
+        },
+        {
+          "name": "systemProgram",
+          "address": "11111111111111111111111111111111"
+        },
+        {
+          "name": "playerTokenAccount",
+          "docs": [
+            "`token_gate::enforce`, which is the whole point of that module. Left",
+            "unchecked here so the program needs no `anchor-spl` dependency.",
+            "",
+            "The *player's* token account for `config.gate_mint` -- not the payer's.",
+            "`token_gate::enforce` requires its owner field to equal `player`, so the",
+            "coordinator cannot pass its own (or any other holder's) account to sneak",
+            "a non-holder in. Optional because the gate can be disabled",
+            "(`gate_mint == Pubkey::default()`), which is how the game runs before",
+            "the token exists -- clients signal `None` by passing the program's own",
+            "id in this slot, per Anchor's optional-account convention."
+          ],
+          "optional": true
         }
       ],
       "args": [
         {
-          "name": "winnersCount",
-          "type": "u32"
+          "name": "guess",
+          "type": "u16"
         }
       ]
     },
     {
-      "name": "payout",
+      "name": "tally",
+      "docs": [
+        "Authority records the number of winning picks (or rolls over if none).",
+        "Count a batch of picks on-chain. Picks arrive in `remaining_accounts`;",
+        "call repeatedly until `round.tallied == round.total_picks`."
+      ],
       "discriminator": [
-        149,
-        140,
-        194,
-        236,
-        174,
-        189,
-        6,
-        239
+        152,
+        106,
+        131,
+        171,
+        155,
+        62,
+        41,
+        7
       ],
       "accounts": [
         {
@@ -265,22 +894,45 @@ export type Monopoly = {
           "signer": true
         },
         {
-          "name": "config"
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
         },
         {
-          "name": "round"
-        },
-        {
-          "name": "treasury",
-          "writable": true
-        },
-        {
-          "name": "pick",
-          "writable": true
-        },
-        {
-          "name": "winner",
-          "writable": true
+          "name": "round",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  114,
+                  111,
+                  117,
+                  110,
+                  100
+                ]
+              },
+              {
+                "kind": "account",
+                "path": "round.round_id",
+                "account": "round"
+              }
+            ]
+          }
         }
       ],
       "args": []
@@ -301,16 +953,16 @@ export type Monopoly = {
       ]
     },
     {
-      "name": "treasury",
+      "name": "playerPick",
       "discriminator": [
-        238,
-        239,
-        123,
-        238,
-        89,
-        1,
-        168,
-        253
+        173,
+        206,
+        121,
+        219,
+        132,
+        29,
+        236,
+        249
       ]
     },
     {
@@ -327,16 +979,16 @@ export type Monopoly = {
       ]
     },
     {
-      "name": "playerPick",
+      "name": "treasury",
       "discriminator": [
-        173,
-        206,
-        121,
-        219,
-        132,
-        29,
-        236,
-        249
+        238,
+        239,
+        123,
+        238,
+        89,
+        1,
+        168,
+        253
       ]
     }
   ],
@@ -415,28 +1067,44 @@ export type Monopoly = {
       "code": 6014,
       "name": "invalidGuess",
       "msg": "Guess must be within the valid dice-sum range"
+    },
+    {
+      "code": 6015,
+      "name": "tokenGateFailed",
+      "msg": "You must hold the game token to play"
+    },
+    {
+      "code": 6016,
+      "name": "invalidParams",
+      "msg": "Round duration or prize is outside the allowed range"
+    },
+    {
+      "code": 6017,
+      "name": "pickNotClosable",
+      "msg": "Pick cannot be closed yet (round unsettled, or an unpaid winner)"
+    },
+    {
+      "code": 6018,
+      "name": "tallyIncomplete",
+      "msg": "Not every pick has been tallied yet"
+    },
+    {
+      "code": 6019,
+      "name": "roundNotExpired",
+      "msg": "Round has not passed its reveal deadline"
+    },
+    {
+      "code": 6020,
+      "name": "wrongRound",
+      "msg": "Pick does not belong to this round"
     }
   ],
   "types": [
     {
-      "name": "phase",
-      "type": {
-        "kind": "enum",
-        "variants": [
-          {
-            "name": "open"
-          },
-          {
-            "name": "drawn"
-          },
-          {
-            "name": "settled"
-          }
-        ]
-      }
-    },
-    {
       "name": "globalConfig",
+      "docs": [
+        "Global, singleton configuration + rollover accounting."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -454,10 +1122,17 @@ export type Monopoly = {
           },
           {
             "name": "prizeLamports",
+            "docs": [
+              "Base prize per round in lamports."
+            ],
             "type": "u64"
           },
           {
             "name": "nextPrizeLamports",
+            "docs": [
+              "Prize armed for the next round to open, produced by the last reveal's",
+              "tile effect (or `prize_lamports` if nothing has re-armed it yet)."
+            ],
             "type": "u64"
           },
           {
@@ -470,29 +1145,104 @@ export type Monopoly = {
           },
           {
             "name": "currentRound",
+            "docs": [
+              "Id of the most recently opened round (0 = none yet)."
+            ],
             "type": "u64"
           },
           {
             "name": "avatarPosition",
+            "docs": [
+              "Avatar's current tile on the ring (persists between rounds)."
+            ],
             "type": "u16"
+          },
+          {
+            "name": "gateMint",
+            "docs": [
+              "SPL mint a player must hold to submit a guess. `Pubkey::default()`",
+              "(all zeros) means the gate is DISABLED and anyone may play -- that is",
+              "the state `initialize` leaves it in, so the game runs before the token",
+              "exists. Arm it later with `set_gate`."
+            ],
+            "type": "pubkey"
           }
         ]
       }
     },
     {
-      "name": "treasury",
+      "name": "phase",
+      "docs": [
+        "Lifecycle of a single round."
+      ],
+      "type": {
+        "kind": "enum",
+        "variants": [
+          {
+            "name": "open"
+          },
+          {
+            "name": "drawn"
+          },
+          {
+            "name": "settled"
+          },
+          {
+            "name": "expired"
+          }
+        ]
+      }
+    },
+    {
+      "name": "playerPick",
+      "docs": [
+        "One wallet's pick for one round. PDA seeds: [\"pick\", round_id_le, player].",
+        "Its existence prevents a second pick by the same wallet in the same round."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
           {
+            "name": "player",
+            "type": "pubkey"
+          },
+          {
+            "name": "roundId",
+            "type": "u64"
+          },
+          {
+            "name": "guess",
+            "docs": [
+              "Guessed dice sum (2..=12)."
+            ],
+            "type": "u16"
+          },
+          {
+            "name": "claimed",
+            "type": "bool"
+          },
+          {
             "name": "bump",
             "type": "u8"
+          },
+          {
+            "name": "counted",
+            "docs": [
+              "Set by `tally` so a pick is counted exactly once, however many times a",
+              "batch is retried. Appending this took the account from 52 to 53 bytes,",
+              "which `server/src/chain.ts`'s `getProgramAccounts` filter must match --",
+              "a stale `dataSize: 52` there silently returns zero picks."
+            ],
+            "type": "bool"
           }
         ]
       }
     },
     {
       "name": "round",
+      "docs": [
+        "Per-round state. PDA seeds: [\"round\", round_id_le]."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
@@ -510,6 +1260,9 @@ export type Monopoly = {
           },
           {
             "name": "commitHash",
+            "docs": [
+              "keccak256(seed) published before picks open."
+            ],
             "type": {
               "array": [
                 "u8",
@@ -519,6 +1272,9 @@ export type Monopoly = {
           },
           {
             "name": "revealedSeed",
+            "docs": [
+              "Revealed after lock so anyone can verify `landed_tile`."
+            ],
             "type": {
               "array": [
                 "u8",
@@ -540,6 +1296,9 @@ export type Monopoly = {
           },
           {
             "name": "prizeLamports",
+            "docs": [
+              "Prize snapshot at open time (consumed from `GlobalConfig::next_prize_lamports`)."
+            ],
             "type": "u64"
           },
           {
@@ -564,36 +1323,38 @@ export type Monopoly = {
           },
           {
             "name": "startTile",
+            "docs": [
+              "Avatar's tile before this round's walk (lets a page refresh rebuild it)."
+            ],
             "type": "u16"
           },
           {
             "name": "nextPrizeLamports",
+            "docs": [
+              "Audit trail: the prize this round's reveal produced for the *next* round."
+            ],
             "type": "u64"
+          },
+          {
+            "name": "tallied",
+            "docs": [
+              "How many picks `tally` has visited. `settle` refuses until this equals",
+              "`total_picks`, which is what makes `winners_count` a figure the chain",
+              "derived rather than one the authority asserted."
+            ],
+            "type": "u32"
           }
         ]
       }
     },
     {
-      "name": "playerPick",
+      "name": "treasury",
+      "docs": [
+        "The program-owned SOL vault. Holds house funds; holds no logic beyond bump."
+      ],
       "type": {
         "kind": "struct",
         "fields": [
-          {
-            "name": "player",
-            "type": "pubkey"
-          },
-          {
-            "name": "roundId",
-            "type": "u64"
-          },
-          {
-            "name": "guess",
-            "type": "u16"
-          },
-          {
-            "name": "claimed",
-            "type": "bool"
-          },
           {
             "name": "bump",
             "type": "u8"

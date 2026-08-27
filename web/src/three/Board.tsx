@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useTexture } from "@react-three/drei";
 import { TILES } from "@monopoly-sol/shared";
 import * as THREE from "three";
@@ -8,17 +8,38 @@ import { BOARD_SIDE, TILE_HEIGHT, placeTile } from "./boardMath";
 import { PALETTE } from "./palette";
 import { Tile } from "./Tile";
 import { tileRegion } from "./board/atlasLayout";
+import { compositeBoardTexture } from "./board/centrePlaque";
 
 /** Painted board art as one flat surface + per-tile hitboxes for the
  * effect-tooltip hover (see `Tile.tsx`) -- picking lives in `GuessPads.tsx`. */
 export function Board() {
-  const texture = useTexture("/board/board-art.png");
+  const base = useTexture("/board/board-art.png");
+  // The wordmark is painted over the source art rather than shipped as a second
+  // image -- see `centrePlaque.ts`. Built once, after fonts settle, because the
+  // canvas silently falls back to a default face if the display font is not
+  // ready yet.
+  const [texture, setTexture] = useState<THREE.Texture | null>(null);
 
   useEffect(() => {
-    texture.colorSpace = THREE.SRGBColorSpace;
-    texture.anisotropy = 8;
-    texture.needsUpdate = true;
-  }, [texture]);
+    let cancelled = false;
+    let built: THREE.CanvasTexture | null = null;
+
+    void document.fonts.ready.then(() => {
+      if (cancelled) return;
+      built = compositeBoardTexture(base.image as CanvasImageSource);
+      setTexture(built);
+    });
+
+    return () => {
+      cancelled = true;
+      built?.dispose();
+    };
+  }, [base]);
+
+  // Hold the art back rather than showing the un-composited texture for a
+  // frame: that frame would flash the old wordmark, which is the one thing
+  // this exists to remove.
+  if (!texture) return null;
 
   return (
     <group>

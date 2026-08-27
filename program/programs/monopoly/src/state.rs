@@ -9,6 +9,9 @@ pub enum Phase {
     Drawn,
     /// Winners recorded / rolled over; payouts allowed.
     Settled,
+    /// The reveal deadline passed without a draw. Terminal: nothing is owed,
+    /// but pick accounts become closable so their rent is never stranded.
+    Expired,
 }
 
 /// Global, singleton configuration + rollover accounting.
@@ -29,6 +32,11 @@ pub struct GlobalConfig {
     pub current_round: u64,
     /// Avatar's current tile on the ring (persists between rounds).
     pub avatar_position: u16,
+    /// SPL mint a player must hold to submit a guess. `Pubkey::default()`
+    /// (all zeros) means the gate is DISABLED and anyone may play -- that is
+    /// the state `initialize` leaves it in, so the game runs before the token
+    /// exists. Arm it later with `set_gate`.
+    pub gate_mint: Pubkey,
 }
 
 /// The program-owned SOL vault. Holds house funds; holds no logic beyond bump.
@@ -62,6 +70,10 @@ pub struct Round {
     pub start_tile: u16,
     /// Audit trail: the prize this round's reveal produced for the *next* round.
     pub next_prize_lamports: u64,
+    /// How many picks `tally` has visited. `settle` refuses until this equals
+    /// `total_picks`, which is what makes `winners_count` a figure the chain
+    /// derived rather than one the authority asserted.
+    pub tallied: u32,
 }
 
 /// One wallet's pick for one round. PDA seeds: ["pick", round_id_le, player].
@@ -71,9 +83,13 @@ pub struct Round {
 pub struct PlayerPick {
     pub player: Pubkey,
     pub round_id: u64,
-    /// Guessed dice sum (2..=12). Field name changed from the tile-lottery
-    /// era's `tile_index`; still a `u16` to keep this account exactly 52 bytes.
+    /// Guessed dice sum (2..=12).
     pub guess: u16,
     pub claimed: bool,
     pub bump: u8,
+    /// Set by `tally` so a pick is counted exactly once, however many times a
+    /// batch is retried. Appending this took the account from 52 to 53 bytes,
+    /// which `server/src/chain.ts`'s `getProgramAccounts` filter must match --
+    /// a stale `dataSize: 52` there silently returns zero picks.
+    pub counted: bool,
 }

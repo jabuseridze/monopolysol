@@ -11,8 +11,11 @@
  * decorrelated per channel so the tail spreads across the stereo field.
  */
 
-let convolver: ConvolverNode | null = null;
-let wet: GainNode | null = null;
+// Keyed by destination, not global. Both sub-buses send here now (drums on
+// `sfx`, the bed on `music`), and a single shared convolver would wire itself
+// to whichever bus asked first -- so fading the music out would also swallow
+// the drum tails, and muting the bed would leave reverb playing on it.
+let buses: Map<AudioNode, ConvolverNode> = new Map();
 let builtFor: AudioContext | null = null;
 
 function impulseResponse(ctx: AudioContext, seconds: number, decay: number): AudioBuffer {
@@ -34,13 +37,19 @@ function impulseResponse(ctx: AudioContext, seconds: number, decay: number): Aud
  * callers connect a send gain here in parallel with their dry path.
  */
 export function reverbBus(ctx: AudioContext, dest: AudioNode): AudioNode {
-  if (convolver && wet && builtFor === ctx) return convolver;
+  if (builtFor !== ctx) {
+    // New context -- every cached node belongs to the old one and is dead.
+    buses = new Map();
+    builtFor = ctx;
+  }
+  const existing = buses.get(dest);
+  if (existing) return existing;
 
-  convolver = ctx.createConvolver();
+  const convolver = ctx.createConvolver();
   convolver.buffer = impulseResponse(ctx, 1.8, 2.6);
-  wet = ctx.createGain();
+  const wet = ctx.createGain();
   wet.gain.value = 0.9;
   convolver.connect(wet).connect(dest);
-  builtFor = ctx;
+  buses.set(dest, convolver);
   return convolver;
 }

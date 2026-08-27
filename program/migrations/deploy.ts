@@ -16,7 +16,13 @@ const PRIZE_LAMPORTS = LAMPORTS_PER_SOL / 2; // 0.5 SOL
 // exposes no config setter -- so the only way to retune it is a fresh chain.
 // Override for fast iteration: `ROUND_DURATION=15 anchor migrate`.
 const ROUND_DURATION = Number(process.env.ROUND_DURATION ?? 100); // seconds
-const INITIAL_FUNDING = 20 * LAMPORTS_PER_SOL;
+// 20 SOL is fine on a local validator, where SOL is free and unlimited. On
+// devnet it is not reachable: the faucet caps a request at 2 SOL and is
+// IP-rate-limited, and the program deploy alone costs ~4.6 SOL. Override with
+// `TREASURY_SOL=2 FORCE_REFUND=1 anchor migrate` when funding is scarce --
+// at 0.5 SOL a round, 2 SOL covers four rounds of testing.
+const TREASURY_SOL = Number(process.env.TREASURY_SOL ?? 20);
+const INITIAL_FUNDING = TREASURY_SOL * LAMPORTS_PER_SOL;
 
 module.exports = async function (provider: anchor.AnchorProvider) {
   anchor.setProvider(provider);

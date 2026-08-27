@@ -41,6 +41,20 @@ export function sfxCtx(): Ctx | null {
   return { ctx, out: engine.sfx, verb: reverbBus(ctx, engine.sfx) };
 }
 
+/**
+ * The same graph on the music bus.
+ *
+ * Unlike `sfxCtx` this does NOT bail when muted. Mute is a ramp on the master
+ * gain, so the bed stays silently in tempo and keeps its place in the
+ * progression; returning null here would strand the scheduler and unmuting
+ * would drop into silence until the next round restarted it.
+ */
+export function musicCtx(): Ctx | null {
+  const ctx = engine.ensure();
+  if (!ctx || !engine.music) return null;
+  return { ctx, out: engine.music, verb: reverbBus(ctx, engine.music) };
+}
+
 /** Same graph, but routed through a panner -- lets one cue place its voices
  * across the stereo field without every primitive growing a `pan` option. */
 export function panned(c: Ctx, pan: number): Ctx {

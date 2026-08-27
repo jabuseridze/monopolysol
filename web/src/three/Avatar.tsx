@@ -7,11 +7,11 @@ import { BEAT_WALK_AT_MS, WALK_STEP_MS } from "@monopoly-sol/shared";
 import { walkPoint } from "@monopoly-sol/shared/ringPath";
 import { placeTile, TILE_HEIGHT } from "./boardMath";
 import { useKayKitModel } from "./useKayKitModel";
+import { AVATAR_MODEL } from "./assets";
 
-/** Placeholder model for the shared round avatar (KayKit Knight, reused from
- * the center-field wanderer pack, scaled up). Swap this one constant for a
- * bespoke asset later. */
-export const AVATAR_MODEL_URL = "/models/Knight.glb";
+/** Kept as a named re-export so call sites don't have to know the model list
+ * moved into `assets.ts` (which owns preloading). */
+export const AVATAR_MODEL_URL = AVATAR_MODEL;
 
 const SCALE = 0.95; // larger than the ~0.55-0.67 center-field wanderers
 // The wanderers ground at `0.45 * scale` with no floor-height term because
@@ -142,6 +142,12 @@ export function Avatar({ avatarTile, walk, drawing, drawResultAt, landedTile }: 
     }
     const rest = placeTile(restTile);
     g.position.set(rest.x, GROUND_Y, rest.z);
+    // Face the way the avatar is about to travel. Without this the rest
+    // branch leaves `rotation.y` at whatever it last was -- zero on page
+    // load, and on a corner landing the *incoming* edge's heading rather
+    // than the outgoing one. A one-step walk from the rest tile gives the
+    // heading toward the next tile, which is where the walk will go.
+    g.rotation.y = walkPoint(restTile, 1, 0).heading;
 
     if (walk != null && !preWalk && walkAt != null && handledWalkAt.current !== walkAt) {
       handledWalkAt.current = walkAt;

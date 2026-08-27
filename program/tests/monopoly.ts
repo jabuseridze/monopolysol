@@ -5,7 +5,7 @@ import { assert } from "chai";
 import { Monopoly } from "../target/types/monopoly";
 import * as h from "./helpers";
 import { landingFor, nextPrizeForLanding } from "@monopoly-sol/shared/effects";
-import { airdrop, openRevealRound, reachablePumpSum, PUMP_TILES, RoundCtx } from "./roundOrchestration";
+import { airdrop, openRevealRound, reachablePumpSum, tallyAndSettle, PUMP_TILES, RoundCtx } from "./roundOrchestration";
 
 const NUM_TILES = 40;
 const PRIZE = LAMPORTS_PER_SOL / 2; // 0.5 SOL
@@ -73,10 +73,19 @@ describe("monopoly: happy path + split payout", () => {
     const cfgAfter = await program.account.globalConfig.fetch(config);
     assert.equal(cfgAfter.avatarPosition, (posBefore + sum) % NUM_TILES);
 
-    await program.methods
-      .settle(2)
-      .accounts({ authority: authority.publicKey, config, round })
-      .rpc();
+    // EVERY pick must be tallied, losers included -- `settle` refuses while any
+    // remain unvisited, which is what makes the count trustworthy. Omitting
+    // carol here is exactly the mistake the check exists to catch.
+    await tallyAndSettle(ctx, roundId, round, [
+      alice.publicKey,
+      bob.publicKey,
+      carol.publicKey,
+    ]);
+
+    // The count came from the chain, not from this test asserting it.
+    const settled = await program.account.round.fetch(round);
+    assert.equal(settled.winnersCount, 2, "only the two correct guesses counted");
+    assert.equal(settled.tallied, 3, "every pick visited, losers included");
 
     const share = drawn.prizeLamports.toNumber() / 2;
     for (const player of [alice, bob]) {
@@ -84,7 +93,7 @@ describe("monopoly: happy path + split payout", () => {
       await program.methods
         .payout()
         .accounts({
-          authority: authority.publicKey,
+          payer: authority.publicKey,
           config,
           round,
           treasury,

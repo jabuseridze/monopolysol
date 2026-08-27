@@ -476,11 +476,27 @@ impl SourceMap {
     fn filepath(&self, span: Span) -> PathBuf {
         for (i, file) in self.files.iter().enumerate() {
             if file.span_within(span) {
-                return PathBuf::from(if i == 0 {
-                    "<unspecified>".to_owned()
+                return if i == 0 {
+                    // LOCAL PATCH (not upstream). Upstream returns the literal
+                    // "<unspecified>" here, which is fine for its own purposes
+                    // but fatal for Anchor: `anchor-syn`'s IDL generator calls
+                    // `Span::call_site().source_file().path()` and then walks
+                    // *up* from it looking for `lib.rs`, panicking with
+                    // "lib.rs should exist" when the walk starts from a path
+                    // that was never real.
+                    //
+                    // Cargo sets CARGO_MANIFEST_DIR to the crate currently
+                    // being compiled whenever it runs rustc, and proc macros
+                    // expand inside that invocation -- so this reconstructs
+                    // the very path the removed `proc_macro` API used to
+                    // report. Falls back to upstream's placeholder if the
+                    // variable is somehow absent.
+                    std::env::var("CARGO_MANIFEST_DIR")
+                        .map(|dir| PathBuf::from(dir).join("src").join("lib.rs"))
+                        .unwrap_or_else(|_| PathBuf::from("<unspecified>"))
                 } else {
-                    format!("<parsed string {}>", i)
-                });
+                    PathBuf::from(format!("<parsed string {}>", i))
+                };
             }
         }
         unreachable!("Invalid span with no related FileInfo!");

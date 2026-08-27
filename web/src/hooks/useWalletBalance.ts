@@ -1,12 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import { LAMPORTS_PER_SOL } from "@solana/web3.js";
-import { useConnection, useWallet } from "@solana/wallet-adapter-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { connection } from "@/lib/connection";
+import { useIdentity } from "./useIdentity";
 
 export function useWalletBalance() {
-  const { connection } = useConnection();
-  const { publicKey } = useWallet();
+  const { address } = useIdentity();
+  const publicKey = useMemo(() => (address ? new PublicKey(address) : null), [address]);
   const [sol, setSol] = useState<number | null>(null);
   const [airdropping, setAirdropping] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -16,14 +17,34 @@ export function useWalletBalance() {
       setSol(null);
       return;
     }
-    const lamports = await connection.getBalance(publicKey, "confirmed");
-    setSol(lamports / LAMPORTS_PER_SOL);
+    try {
+      const lamports = await connection.getBalance(publicKey, "confirmed");
+      setSol(lamports / LAMPORTS_PER_SOL);
+    } catch {
+      // A throttled or flaky RPC read must not take down the HUD; the next
+      // poll will pick it up. Keep the last known figure on screen.
+    }
   }, [connection, publicKey]);
 
   useEffect(() => {
     refresh();
-    const id = setInterval(refresh, 15000);
-    return () => clearInterval(id);
+    // Every connected player polls this against the same RPC endpoint the
+    // coordinator depends on, forever, whether or not they are looking at the
+    // page. At 100 players a 15s interval is ~7 requests/second of pure
+    // background noise competing with the game's own reads -- so poll less
+    // often, and not at all while the tab is hidden.
+    const id = setInterval(() => {
+      if (document.visibilityState === "visible") void refresh();
+    }, 30000);
+    // Catch up immediately on return, so the pause is invisible to the player.
+    const onVisible = () => {
+      if (document.visibilityState === "visible") void refresh();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      clearInterval(id);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
   }, [refresh]);
 
   const airdrop = useCallback(async () => {

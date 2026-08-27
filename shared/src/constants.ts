@@ -92,8 +92,10 @@ export const SOCKET_EVENTS = {
   drawCue: "round:drawCue",
   /** Cue the hologram spin toward the winning tile. */
   drawResult: "round:drawResult",
-  /** Final settlement with winners + payout. */
+  /** Winners + share, broadcast before any payout is attempted. */
   settled: "round:settled",
+  /** Payout signatures trickling in as the background queue drains. */
+  payouts: "round:payouts",
   /** Live online-wallet count + current guess tally. */
   presence: "presence",
 } as const;

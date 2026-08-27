@@ -38,26 +38,40 @@
   top: 16px;
   left: 50%;
   transform: translateX(-50%);
-  padding: 14px 24px 12px;
-  text-align: center;
-  min-width: 236px;
+  min-width: 340px;
 }
 
-.clock-eyebrow {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--panel-border);
-  opacity: 0.72;
-  margin-bottom: 8px;
+/* Landscape rather than the old near-square: the ring sits beside the prize
+   and round number instead of stacked above them. Shorter as well as wider, so
+   a panel pinned to the top edge stops crowding the board. */
+/* The hero panel: widest band, longest labels, and the most room to use. At
+   340px wide with 14px padding either side there is 312px available, and the
+   longest label ("Guess where the avatar lands") measures ~260px here -- so
+   this is set as large as it can go while still clearing every phase string. */
+.clock .panel-band {
+  font-size: 15px;
+  letter-spacing: 0.05em;
+}
+
+.clock-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 18px;
 }
 
 .clock-ring {
   position: relative;
-  width: 132px;
-  height: 132px;
-  margin: 0 auto;
+  width: 104px;
+  height: 104px;
+  flex: none;
+}
+
+/* Fills the space the ring no longer occupies vertically. */
+.clock-meta {
+  flex: 1;
+  min-width: 0;
+  text-align: left;
 }
 
 .clock-ring svg {
@@ -80,13 +94,18 @@
   stroke-linecap: round;
 }
 
+/* The scoreboard. This is the single most-looked-at element on screen and it
+   was rendering at body weight in the system stack -- the display face and the
+   extra size are what turn it from a label into the thing you watch. */
 .clock-readout {
   position: absolute;
   inset: 0;
   display: grid;
   place-items: center;
-  font-size: 38px;
-  font-weight: 800;
+  font-family: var(--font-display), var(--font-body);
+  font-size: 34px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
   line-height: 1;
   color: var(--panel-border);
 }
@@ -95,19 +114,36 @@
   color: var(--danger);
 }
 
+/* Sized against the ring's INTERIOR (outer width minus the 10px stroke either
+   side = 84px), not against the panel. At 30px with wide tracking "ROLL!"
+   measured 87px and spilled over the stroke -- a leftover from when the ring
+   was 132px. 22px measures ~62px, which sits inside with real margin. */
 .clock-readout.roll {
-  font-size: 30px;
-  letter-spacing: 0.04em;
+  font-size: 22px;
+  letter-spacing: 0.02em;
   color: var(--chance);
 }
 
-.clock-prize {
-  margin-top: 10px;
-  font-size: 13px;
+.clock-prize-label {
   display: flex;
   align-items: center;
-  justify-content: center;
   gap: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted-strong);
+}
+
+/* The figure players actually read. Was 14px inline beside its own label, which
+   left it competing with the label for a 180px column and losing. */
+.clock-prize-value {
+  font-family: var(--font-display), var(--font-body);
+  font-size: 24px;
+  font-weight: 600;
+  line-height: 1.05;
+  margin-top: 2px;
+  color: var(--text);
 }
 
 .coin-dot {
@@ -120,5 +156,234 @@
 }
 
 .clock-round {
+  margin-top: 4px;
+  font-size: 12.5px;
+  color: var(--muted-strong);
+}
+
+/* --- Presence readout ---------------------------------------------------- */
+/* Bottom centre: the one edge of the screen nothing else claims (guess panel
+   bottom-left, mute bottom-right, clock top-centre, wallet top-right). */
+
+.presence {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  text-align: center;
+}
+
+.presence-body {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 18px;
+}
+
+.presence-stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+/* Reads as a live indicator rather than decoration. */
+.presence-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--good);
+  align-self: center;
+  box-shadow: 0 0 0 3px rgba(47, 158, 68, 0.18);
+}
+
+/* `tabular-nums` so the panel doesn't twitch on every tick: at 100 players
+   these run to three digits and proportional figures change width as they
+   count. `min-width` holds the box steady from the very first render. */
+.presence-num {
+  font-family: var(--font-display), var(--font-body);
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  min-width: 1ch;
+  text-align: right;
+}
+
+.presence-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted-strong);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
   color: var(--muted);
+}
+
+.presence-sep {
+  width: 1px;
+  height: 18px;
+  background: rgba(40, 8, 88, 0.18);
+}
+
+/* --- Playing-as chip ----------------------------------------------------- */
+/* The in-game identity readout. The address *form* moved to the landing
+   screen, so only the display and its "Change" exit remain here. */
+
+.wallet-bar {
+  max-width: 290px;
+}
+
+.wallet-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.wallet-sol {
+  font-size: 19px;
+}
+
+.wallet-net {
+  font-size: 11px;
+  color: var(--muted-strong);
+}
+
+.wallet-error {
+  font-size: 11px;
+  color: var(--danger);
+  text-align: right;
+  font-weight: 700;
+}
+
+.watch-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.watch-badge {
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--text);
+}
+
+.watch-addr {
+  font-size: 12px;
+  color: var(--text);
+}
+
+.watch-clear {
+  font-size: 11px;
+  padding: 3px 8px;
+}
+
+/* Camera controls hint, shown only while guessing is open. */
+.cam-hint {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(40, 8, 88, 0.12);
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+/* Bottom-left guess panel. Padding lives on `.panel-body` now so the band can
+   reach the panel's edges. */
+.pick-panel {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  width: 262px;
+}
+
+.pick-sum {
+  font-size: 22px;
+  margin: 2px 0 2px;
+}
+
+/* --- Verify payouts ------------------------------------------------------ */
+/* Bottom-right: the only corner nothing else claims (mute top-left, clock
+   top-centre, wallet top-right, guess panel bottom-left, counts bottom-centre). */
+
+.verify {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  max-width: 236px;
+  text-align: left;
+  text-decoration: none;
+  transition: transform 0.12s ease, filter 0.12s ease;
+}
+
+.verify-note {
+  padding: 7px 12px 8px;
+  font-size: 10.5px;
+  line-height: 1.35;
+  color: var(--muted-strong);
+}
+
+a.verify:hover {
+  transform: translateY(-1px);
+  filter: brightness(1.03);
+}
+
+a.verify:active {
+  transform: translateY(1px);
+}
+
+/* Localnet: present but inert, so the design is visible in development and the
+   reason for the dead end is stated rather than left to guesswork. */
+/* Inert, but still legible: the previous version dropped opacity on the whole
+   panel, which left grey text on a translucent card floating over bright grass. */
+.verify-off {
+  cursor: not-allowed;
+}
+
+.verify-off .panel-band {
+  background: var(--muted);
+}
+
+/* The presence bar is centred at this same height. Below this width the two
+   would collide, so drop the caption and let the label alone hold the corner. */
+@media (max-width: 900px) {
+  .verify {
+    max-width: none;
+    padding: 6px 10px;
+  }
+  .verify-note {
+    display: none;
+  }
+}
+
+/* --- Token-gate footnote (inside YOUR GUESS) ----------------------------- */
+
+.gate-note {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(40, 8, 88, 0.12);
+  font-size: 11.5px;
+  line-height: 1.4;
+  color: var(--muted);
+}
+
+.gate-ok {
+  color: var(--good);
+  font-weight: 700;
+}
+
+.gate-token {
+  color: var(--crate);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.gate-token:hover {
+  text-decoration: underline;
 }

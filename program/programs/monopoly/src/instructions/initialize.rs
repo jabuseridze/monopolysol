@@ -44,6 +44,8 @@ pub fn handler(
     config.round_duration = round_duration;
     config.current_round = 0;
     config.avatar_position = 0;
+    // Gate starts disabled so the game is playable before the token exists.
+    config.gate_mint = Pubkey::default();
 
     ctx.accounts.treasury.bump = ctx.bumps.treasury;
 

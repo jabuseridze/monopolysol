@@ -20,3 +20,21 @@ services:
         sync: false
       - key: PORT
         value: 4000
+      # REQUIRED. Derives every round's commit-reveal seed (server/src/secrets.ts).
+      # Generate with `openssl rand -hex 32`. As sensitive as the authority key:
+      # whoever holds it can predict every future roll. Must stay STABLE --
+      # rotating it mid-round strands that round's commit.
+      - key: MASTER_SECRET
+        sync: false
+      # SPL mint players must hold. Omit to run with the gate disabled.
+      - key: GATE_MINT
+        sync: false
+      # Spend caps for coordinator-funded picks (server/src/guessIntake.ts).
+      # The house pays ~0.0013 SOL of rent per guess, so these bound how much a
+      # burst can cost before the sweeper reclaims it.
+      - key: MAX_PICKS_PER_ROUND
+        value: 500
+      - key: AUTHORITY_MIN_BALANCE_SOL
+        value: 1
+      - key: MAX_GUESSES_PER_SOCKET
+        value: 5

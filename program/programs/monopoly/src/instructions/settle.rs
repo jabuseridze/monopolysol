@@ -31,18 +31,25 @@ pub struct Settle<'info> {
     pub round: Account<'info, Round>,
 }
 
-pub fn handler(ctx: Context<Settle>, winners_count: u32) -> Result<()> {
+pub fn handler(ctx: Context<Settle>) -> Result<()> {
     let round = &mut ctx.accounts.round;
 
     require!(round.phase == Phase::Drawn, GameError::NotDrawn);
 
-    round.winners_count = winners_count;
+    // `winners_count` is no longer an argument. It is accumulated by `tally`,
+    // which re-derives every pick's PDA before counting it, and settlement is
+    // refused until every pick `submit_guess` recorded has been visited. That
+    // turns the share divisor in `payout` from something the authority asserts
+    // into something the chain derived.
+    require!(round.tallied == round.total_picks, GameError::TallyIncomplete);
+
     round.phase = Phase::Settled;
 
     msg!(
-        "Round {} settled with {} winner(s)",
+        "Round {} settled with {} winner(s) from {} pick(s)",
         round.round_id,
-        winners_count
+        round.winners_count,
+        round.total_picks
     );
     Ok(())
 }

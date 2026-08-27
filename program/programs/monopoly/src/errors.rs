@@ -32,4 +32,16 @@ pub enum GameError {
     Overflow,
     #[msg("Guess must be within the valid dice-sum range")]
     InvalidGuess,
+    #[msg("You must hold the game token to play")]
+    TokenGateFailed,
+    #[msg("Round duration or prize is outside the allowed range")]
+    InvalidParams,
+    #[msg("Pick cannot be closed yet (round unsettled, or an unpaid winner)")]
+    PickNotClosable,
+    #[msg("Not every pick has been tallied yet")]
+    TallyIncomplete,
+    #[msg("Round has not passed its reveal deadline")]
+    RoundNotExpired,
+    #[msg("Pick does not belong to this round")]
+    WrongRound,
 }

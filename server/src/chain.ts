@@ -62,9 +62,18 @@ export class Chain {
     const accounts = await this.connection.getProgramAccounts(this.programId, {
       filters: [
         // 8 disc + player(32) + round_id(8) + guess(2) + claimed(1) + bump(1)
-        { dataSize: 52 },
+        // + counted(1). Bumped from 52 when `tally` added the counted flag --
+        // a stale value here returns zero picks with no error.
+        { dataSize: 53 },
         { memcmp: { offset: PICK_OFFSETS.roundId, bytes: bs58le(roundId) } },
       ],
+      // No `dataSlice`: the fields actually read (player at 8, guess at 48)
+      // span all but the last two bytes of a 52-byte account, so slicing
+      // would save nothing while invalidating `PICK_OFFSETS`, which are
+      // absolute. The real cost of this call is the RPC node's scan over
+      // every account the program has ever owned -- pick PDAs are never
+      // closed, so that grows with total game history, not with the current
+      // round. Fixing that needs an index, not a smaller payload.
     });
     const counts: Record<number, number> = {};
     const byGuess: Record<number, PublicKey[]> = {};
@@ -114,10 +123,37 @@ export class Chain {
     }));
   }
 
-  settle(roundId: number | bigint, winnersCount: number) {
-    const count = Buffer.alloc(4);
-    count.writeUInt32LE(winnersCount);
-    const data = Buffer.concat([ixDiscriminator("settle"), count]);
+  /** Count a batch of picks on-chain. Repeat until `tallied == total_picks`. */
+  tally(roundId: number | bigint, players: PublicKey[]) {
+    return this.send(new TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        key(this.authority.publicKey, true, false),
+        key(configPda(this.programId), false, false),
+        key(roundPda(this.programId, roundId), false, true),
+        // Picks ride in `remaining_accounts`: writable (the instruction sets
+        // their `counted` flag) and non-signing.
+        ...players.map((p) => key(pickPda(this.programId, roundId, p), false, true)),
+      ],
+      data: ixDiscriminator("tally"),
+    }));
+  }
+
+  /** Permissionless write-off for a round nobody ever revealed. */
+  expireRound(roundId: number | bigint) {
+    return this.send(new TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        key(this.authority.publicKey, true, false),
+        key(roundPda(this.programId, roundId), false, true),
+      ],
+      data: ixDiscriminator("expire_round"),
+    }));
+  }
+
+  /** Takes no winner count any more -- `tally` derives it on-chain. */
+  settle(roundId: number | bigint) {
+    const data = ixDiscriminator("settle");
     return this.send(new TransactionInstruction({
       programId: this.programId,
       keys: [
@@ -129,11 +165,65 @@ export class Chain {
     }));
   }
 
+  /**
+   * Submit a guess on a player's behalf.
+   *
+   * The player pasted an address rather than connecting a wallet, so they
+   * cannot sign and cannot fund the pick account -- the authority does both.
+   * The chain still enforces the token gate against `player` (not against the
+   * signer), so this cannot let a non-holder play.
+   *
+   * `playerTokenAccount` is the player's associated token account for the gate
+   * mint, or the program id to mean "None" when the gate is disabled (Anchor's
+   * optional-account convention, matching what the web client used to send).
+   */
+  submitGuess(
+    roundId: number | bigint,
+    player: PublicKey,
+    guess: number,
+    playerTokenAccount: PublicKey | null
+  ) {
+    const arg = Buffer.alloc(2);
+    arg.writeUInt16LE(guess);
+    const data = Buffer.concat([ixDiscriminator("submit_guess"), arg]);
+    return this.send(new TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        key(this.authority.publicKey, true, true),
+        key(player, false, false),
+        key(configPda(this.programId), false, false),
+        key(roundPda(this.programId, roundId), false, true),
+        key(pickPda(this.programId, roundId, player), false, true),
+        key(SystemProgram.programId, false, false),
+        key(playerTokenAccount ?? this.programId, false, false),
+      ],
+      data,
+    }));
+  }
+
+  /** Reclaim a settled pick's rent. Reverts on an unpaid winner. */
+  closePick(roundId: number | bigint, player: PublicKey) {
+    return this.send(new TransactionInstruction({
+      programId: this.programId,
+      keys: [
+        key(this.authority.publicKey, true, true),
+        key(configPda(this.programId), false, false),
+        key(roundPda(this.programId, roundId), false, false),
+        key(pickPda(this.programId, roundId, player), false, true),
+      ],
+      data: ixDiscriminator("close_pick"),
+    }));
+  }
+
   payout(roundId: number | bigint, winner: PublicKey) {
     const data = ixDiscriminator("payout");
     return this.send(new TransactionInstruction({
       programId: this.programId,
       keys: [
+        // Slot 0 is `payer`, not `authority` -- `payout` is permissionless
+        // (see `payout.rs`). The coordinator signs here because it is paying
+        // the fee, not because the program requires it; the same instruction
+        // is built browser-side with the winner as payer for manual claims.
         key(this.authority.publicKey, true, false),
         key(configPda(this.programId), false, false),
         key(roundPda(this.programId, roundId), false, false),

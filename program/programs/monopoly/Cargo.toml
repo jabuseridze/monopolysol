@@ -17,4 +17,8 @@ no-log-ix-name = []
 idl-build = ["anchor-lang/idl-build"]
 
 [dependencies]
+# Deliberately the only dependency. `anchor-spl` was tried for the token gate
+# and backed out: it drags in spl-token-2022, which pins an incompatible borsh
+# and breaks the IDL build on this toolchain. The gate reads the token account
+# layout directly instead -- see `token_gate.rs`.
 anchor-lang = "0.30.1"

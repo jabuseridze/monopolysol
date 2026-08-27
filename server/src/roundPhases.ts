@@ -4,6 +4,8 @@ import { PHASE_OPEN, RoundData } from "./anchorCodec.js";
 import { Chain } from "./chain.js";
 import { ClusterClock } from "./clusterClock.js";
 import { Emitter } from "./emitter.js";
+import { PayoutQueue } from "./payouts.js";
+import { PickSweeper } from "./pickSweeper.js";
 import { deriveDice } from "./seed.js";
 
 /** Per-phase handlers for the round loop. Kept out of `roundLoop.ts` (which
@@ -15,7 +17,11 @@ export interface LoopCtx {
   chain: Chain;
   emit: Emitter;
   clock: ClusterClock;
-  secretPath: string;
+  /** Long-lived secret the per-round commit-reveal seed is derived from. */
+  masterSecret: string;
+  /** Winners are handed here and paid off the loop -- see `payouts.ts`. */
+  payouts: PayoutQueue;
+  sweeper: PickSweeper;
   setState: (patch: Partial<RoundStateDTO>) => void;
 }
 
@@ -28,6 +34,11 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * tighter cadence below. The wall-clock deadline the client counts down to is
  * only as good as the offset it was derived from, and the last few seconds are
  * exactly where an inaccurate deadline is visible. */
+/** Picks per `tally` transaction. Each rides in `remaining_accounts`, and a
+ * transaction caps out around the mid-30s of accounts once the fixed three and
+ * the signature overhead are counted -- 25 leaves comfortable headroom. */
+const TALLY_BATCH = 25;
+
 const ENDGAME_SEC = 15;
 const CLOCK_SYNC_MS = 10_000;
 const CLOCK_SYNC_ENDGAME_MS = 2_000;
@@ -134,29 +145,48 @@ export async function drawAndSettle(
   const winningSum = round.diceA + round.diceB;
   const { byGuess } = await ctx.chain.getPicks(roundId);
   const winners = byGuess[winningSum] ?? [];
-  await ctx.chain.settle(roundId, winners.length);
+  // Every player who guessed, winner or not -- the tally's and sweeper's list.
+  const everyone = Object.values(byGuess).flat();
+
+  // Count on-chain before settling. `settle` refuses until every pick has been
+  // visited, so the share divisor `payout` uses is derived by the program
+  // rather than asserted by this process. Batched because a transaction can
+  // only carry a few dozen accounts.
+  for (let i = 0; i < everyone.length; i += TALLY_BATCH) {
+    await ctx.chain.tally(roundId, everyone.slice(i, i + TALLY_BATCH));
+  }
+  await ctx.chain.settle(roundId);
   console.log(
     `[roundLoop] round ${roundId} settled: winning sum ${winningSum}, ${winners.length} winner(s)`
   );
 
   const prize = Number(round.prizeLamports);
   const share = winners.length > 0 ? Math.floor(prize / winners.length) : 0;
-  let lastSig: string | null = null;
-  for (const w of winners) {
-    try {
-      lastSig = await ctx.chain.payout(roundId, w);
-    } catch (e) {
-      console.error("[roundLoop] payout failed for", w.toBase58(), e);
-    }
-  }
-
   const winnerStrs = winners.map((w) => w.toBase58());
+
   console.log(
     `[roundLoop] round ${roundId} complete: prize ${prize} lamports, share ${share} lamports/winner, ` +
       `next prize ${round.nextPrizeLamports} lamports`
   );
+
+  // Announce the result BEFORE paying anyone. The winners and their share are
+  // already known here -- they come from the settled on-chain round, not from
+  // the payout transactions -- so making players wait on payout confirmations
+  // to find out who won was pure latency. It also used to mean the announcement
+  // arrived a full second per winner late.
   ctx.setState({ phase: "settled", winners: winnerStrs });
-  ctx.emit.settled(roundId, round.landedTile, winnerStrs, prize, share, lastSig);
+  ctx.emit.settled(roundId, round.landedTile, winnerStrs, prize, share);
+
+  // Hand the payouts to the background queue and return. Nothing after this
+  // point waits on them, so the next round opens on the choreography clock
+  // rather than on however long the treasury takes to pay 30 people.
+  ctx.payouts.enqueue(roundId, winners);
+
+  // Reclaim the rent the coordinator fronted for each pick. Queued after the
+  // payouts deliberately: `close_pick` refuses to close an unpaid winner, so
+  // letting the payout queue go first means most picks close on the first pass
+  // instead of waiting for the next round's sweep.
+  ctx.sweeper.enqueue(roundId, everyone);
 
   return { diceSum: winningSum, drawResultAt };
 }

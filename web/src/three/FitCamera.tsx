@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useCallback, useEffect } from "react";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { BOARD_SIDE } from "./boardMath";
@@ -60,8 +60,9 @@ export function FitCamera() {
   const camera = useThree((s) => s.camera) as THREE.PerspectiveCamera;
   const size = useThree((s) => s.size);
   const controls = useThree((s) => s.controls) as unknown as ControlsLike | null;
+  const gl = useThree((s) => s.gl);
 
-  useEffect(() => {
+  const fit = useCallback(() => {
     if (!camera.isPerspectiveCamera) return;
 
     // Keep whatever direction the camera currently looks from, so a resize
@@ -125,6 +126,22 @@ export function FitCamera() {
       controls.update();
     }
   }, [camera, controls, size.width, size.height]);
+
+  // Re-frame on mount and whenever the window changes shape.
+  useEffect(() => {
+    fit();
+  }, [fit]);
+
+  // Double-click anywhere on the board to snap back to the framed view.
+  // Panning (enabled while guessing is open) can carry the board off screen
+  // with no way back -- orbit and zoom both work relative to wherever the
+  // target was left, so without this a player who drags too far is simply
+  // stuck looking at empty grass until the next resize.
+  useEffect(() => {
+    const dom = gl.domElement;
+    dom.addEventListener("dblclick", fit);
+    return () => dom.removeEventListener("dblclick", fit);
+  }, [gl, fit]);
 
   return null;
 }

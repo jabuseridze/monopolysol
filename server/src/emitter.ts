@@ -1,4 +1,4 @@
-import { RoundStateDTO } from "@monopoly-sol/shared";
+import { PayoutProgressDTO, RoundStateDTO } from "@monopoly-sol/shared";
 
 /**
  * Socket.IO broadcast surface the round loop drives. Field names here match
@@ -23,12 +23,14 @@ export interface Emitter {
     seedHex: string,
     commitHex: string
   ) => void;
+  /** Fires as soon as winners are known -- before any payout is attempted. */
   settled: (
     roundId: number,
     landedTile: number,
     winners: string[],
     prize: number,
-    share: number,
-    sig: string | null
+    share: number
   ) => void;
+  /** Fires repeatedly afterwards as the background payout queue drains. */
+  payouts: (p: PayoutProgressDTO) => void;
 }

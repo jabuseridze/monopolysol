@@ -6,6 +6,8 @@ import { ResultsModal } from "./ResultsModal";
 import { WalletBar } from "./WalletBar";
 import { MuteButton } from "./MuteButton";
 import { RulesPanel } from "./RulesPanel";
+import { PresenceBar } from "./PresenceBar";
+import { VerifyPayouts } from "./VerifyPayouts";
 
 export function Hud() {
   return (
@@ -13,6 +15,8 @@ export function Hud() {
       <WalletBar />
       <Countdown />
       <PickPanel />
+      <PresenceBar />
+      <VerifyPayouts />
       <MuteButton />
       <RulesPanel />
       <ResultsModal />

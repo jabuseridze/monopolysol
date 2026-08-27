@@ -1,0 +1,94 @@
+/* Title-deed panels.
+ *
+ * Every HUD box used to be the same flat cream rectangle with a hairline
+ * border, so five panels doing five different jobs carried identical weight and
+ * the screen read as a stack of dialogs sitting on a game rather than as part
+ * of one. A Monopoly property card solves exactly this problem with one device:
+ * a bold colour band across the top that names the card and tells you at a
+ * glance which one it is.
+ *
+ * The band is OPT-IN -- an extra child, never baked into `.panel` -- because
+ * `.panel` is also worn by the results modal, the rules card and the no-WebGL
+ * screen, none of which want a stripe.
+ */
+
+/* Only panels that actually carry a band clip their corners, so the band's top
+   edge follows the border radius. Applying this to every `.panel` would crop
+   the results modal's confetti and the rules card's scroll shadow.
+   `.panel` itself carries no padding -- each component sets its own inline --
+   so a banded panel must drop that inline padding and let `.panel-body` own it,
+   or the band will not reach the edges. */
+.panel:has(> .panel-band) {
+  overflow: hidden;
+}
+
+.panel-band {
+  display: block;
+  padding: 8px 14px 7px;
+  font-family: var(--font-display), var(--font-body);
+  /* 11.5px left the longest label spanning barely two-thirds of the band, which
+     read as timid rather than deliberate. Sizes here are bounded by the longest
+     label each panel can show -- `white-space: nowrap` plus the panel's
+     `overflow: hidden` means an oversized band clips silently rather than
+     wrapping, so any increase has to be measured, not guessed. */
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: #fff;
+  /* The printed rule under the colour block on a real title deed. */
+  border-bottom: 2px solid rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+}
+
+/* The band reaches the panel's edges, so the body owns the padding. */
+.panel-body {
+  padding: 12px 14px 13px;
+}
+
+/* --- Band colours, all drawn from the board itself ----------------------- */
+
+/* The MONOPOLY plaque. Reserved for the countdown -- the panel that should
+   dominate. */
+.band-purple {
+  background: var(--panel-border);
+}
+
+.band-crate {
+  background: var(--crate);
+}
+
+/* Gold takes dark text: white on this yellow fails contrast badly. */
+.band-gold {
+  background: var(--accent);
+  color: #3a2a00;
+  border-bottom-color: rgba(0, 0, 0, 0.28);
+}
+
+.band-chance {
+  background: var(--chance);
+}
+
+.band-good {
+  background: var(--good);
+}
+
+/* --- Shared panel typography -------------------------------------------- */
+
+/* The number a panel exists to show: countdown, player counts, prize. Board
+   games print these big and heavy, and the old UI rendered them at body size. */
+.panel-figure {
+  font-family: var(--font-display), var(--font-body);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: var(--text);
+  line-height: 1;
+}
+
+/* Secondary copy inside a panel. Deliberately `--muted-strong`, not `--muted`:
+   this is text people read, not decoration. */
+.panel-note {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted-strong);
+}

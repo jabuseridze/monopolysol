@@ -1,8 +1,8 @@
 import { RoundStateDTO } from "@monopoly-sol/shared";
 import { GlobalConfigData, RoundData } from "./anchorCodec.js";
 import { LoopCtx } from "./roundPhases.js";
-import { makeRoundSecret, toHex } from "./seed.js";
-import { readRoundSecret, writeRoundSecret } from "./secrets.js";
+import { toHex } from "./seed.js";
+import { roundSecret } from "./secrets.js";
 
 /**
  * Opening/resuming an `Open` round: persisting + reloading the commit-reveal
@@ -10,22 +10,17 @@ import { readRoundSecret, writeRoundSecret } from "./secrets.js";
  * `roundPhases.ts` to keep each file focused (see that file's header).
  */
 
-/** Persist the secret *before* opening on-chain, then open. Persisting first
- * is what makes resume-after-crash possible: if the process dies between the
- * write and the on-chain open call, the retry just opens (harmlessly
- * overwriting the unused secret); if it dies after, the secret needed to
- * reveal this round is already safe on disk. */
+/** Derive this round's secret and open on-chain.
+ *
+ * Nothing is persisted: `roundSecret()` is a pure function of the master
+ * secret and the round id, so a crash at any point here is recoverable simply
+ * by deriving again. */
 export async function openNewRound(
   ctx: LoopCtx,
   cfg: GlobalConfigData
 ): Promise<{ roundId: number; locksAtMs: number; seed: Buffer }> {
   const roundId = Number(cfg.currentRound) + 1;
-  const secret = makeRoundSecret();
-  writeRoundSecret(ctx.secretPath, {
-    roundId,
-    seedHex: secret.seed.toString("hex"),
-    commitHex: toHex(secret.commitHash),
-  });
+  const secret = roundSecret(ctx.masterSecret, roundId);
   await ctx.chain.openRound(roundId, secret.commitHash);
 
   const round = await ctx.chain.getRound(roundId);
@@ -39,30 +34,36 @@ export async function openNewRound(
   return { roundId, locksAtMs, seed: secret.seed };
 }
 
-/** Resume an `Open` round found on chain at startup, reloading its secret
- * from disk (written by `openNewRound` before the crash). */
+/** Resume an `Open` round found on chain at startup.
+ *
+ * Re-derives the secret rather than loading it. This is the case that used to
+ * be fatal after a redeploy -- see `secrets.ts`. */
 export function resumeOpenRound(
   ctx: LoopCtx,
   round: RoundData,
   cfg: GlobalConfigData
 ): { roundId: number; locksAtMs: number; seed: Buffer } {
   const roundId = Number(round.roundId);
-  const stored = readRoundSecret(ctx.secretPath);
-  if (!stored || stored.roundId !== roundId) {
+  const secret = roundSecret(ctx.masterSecret, roundId);
+  // A mismatch means the master secret is not the one this round was opened
+  // with -- almost certainly a rotated or wrong `MASTER_SECRET`. Fail loudly
+  // here rather than sending a reveal the program will reject as `BadReveal`.
+  const onChainCommit = round.commitHash.toString("hex");
+  if (toHex(secret.commitHash) !== onChainCommit) {
     throw new Error(
-      `cannot resume round ${roundId}: no matching persisted secret at ${ctx.secretPath} ` +
-        `(found ${stored ? `roundId=${stored.roundId}` : "nothing"})`
+      `cannot resume round ${roundId}: derived commit does not match the chain. ` +
+        `MASTER_SECRET is wrong or was rotated mid-round.`
     );
   }
   const locksAtMs = Number(round.locksAt) * 1000;
   const nowMs = ctx.clock.now();
   ctx.setState(
-    openSnapshot(roundId, round, cfg.numTiles, cfg.avatarPosition, stored.commitHex, nowMs)
+    openSnapshot(roundId, round, cfg.numTiles, cfg.avatarPosition, toHex(secret.commitHash), nowMs)
   );
   console.log(
     `[roundLoop] resumed round ${roundId} in Open phase, ${Math.max(0, Math.ceil((locksAtMs - nowMs) / 1000))}s left`
   );
-  return { roundId, locksAtMs, seed: Buffer.from(stored.seedHex, "hex") };
+  return { roundId, locksAtMs, seed: secret.seed };
 }
 
 function openSnapshot(

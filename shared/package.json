@@ -13,7 +13,8 @@
     "./effects": "./src/effects.ts",
     "./effectCopy": "./src/effectCopy.ts",
     "./ringPath": "./src/ringPath.ts",
-    "./layout": "./src/layout.ts"
+    "./layout": "./src/layout.ts",
+    "./explorer": "./src/explorer.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

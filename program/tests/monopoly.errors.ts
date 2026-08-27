@@ -68,18 +68,21 @@ describe("monopoly: rejections", () => {
     await airdrop(alice);
     const pick = h.pickPda(pid, roundId, alice.publicKey);
     const base = {
+      payer: authority.publicKey,
       player: alice.publicKey,
       config,
       round,
       pick,
       systemProgram: SystemProgram.programId,
+      // Gate is disabled in tests; Anchor requires optional accounts be explicit.
+      playerTokenAccount: null,
     };
 
-    await program.methods.submitGuess(3).accounts(base).signers([alice]).rpc();
+    await program.methods.submitGuess(3).accounts(base).rpc();
 
     let threw = false;
     try {
-      await program.methods.submitGuess(5).accounts(base).signers([alice]).rpc();
+      await program.methods.submitGuess(5).accounts(base).rpc();
     } catch {
       threw = true; // account already initialized
     }
@@ -125,17 +128,20 @@ describe("monopoly: rejections", () => {
     const player = Keypair.generate();
     await airdrop(player);
     const base = {
+      payer: authority.publicKey,
       player: player.publicKey,
       config,
       round,
       pick: h.pickPda(pid, roundId, player.publicKey),
       systemProgram: SystemProgram.programId,
+      // Gate is disabled in tests; Anchor requires optional accounts be explicit.
+      playerTokenAccount: null,
     };
 
     for (const guess of [1, 13]) {
       let msg = "";
       try {
-        await program.methods.submitGuess(guess).accounts(base).signers([player]).rpc();
+        await program.methods.submitGuess(guess).accounts(base).rpc();
       } catch (e: any) {
         msg = e.toString();
       }
@@ -186,18 +192,36 @@ describe("monopoly: rejections", () => {
       .accounts({ authority: authority.publicKey, config, treasury, round, systemProgram: SystemProgram.programId })
       .rpc();
 
+    // Guesses correctly, so the round has a genuine winner.
+    const winner = Keypair.generate();
+    await airdrop(winner);
+    await program.methods
+      .submitGuess(sum)
+      .accounts({
+        payer: authority.publicKey,
+        player: winner.publicKey,
+        config,
+        round,
+        pick: h.pickPda(pid, roundId, winner.publicKey),
+        systemProgram: SystemProgram.programId,
+        playerTokenAccount: null,
+      })
+      .rpc();
+
     const loser = Keypair.generate();
     await airdrop(loser);
     await program.methods
       .submitGuess(wrongGuess)
       .accounts({
+        payer: authority.publicKey,
         player: loser.publicKey,
         config,
         round,
         pick: h.pickPda(pid, roundId, loser.publicKey),
         systemProgram: SystemProgram.programId,
+        // Gate is disabled in tests; Anchor requires optional accounts be explicit.
+        playerTokenAccount: null,
       })
-      .signers([loser])
       .rpc();
 
     await h.sleep(DURATION * 1000 + 500);
@@ -206,20 +230,35 @@ describe("monopoly: rejections", () => {
       .accounts({ authority: authority.publicKey, config, round })
       .rpc();
 
-    // Authority-asserted winner count -- nobody actually guessed `sum` here,
-    // but settle() trusts the authority's count, so this reaches the guess
-    // check inside payout() rather than failing earlier on NoWinners.
+    // Counted on-chain now, so a fake winner count is no longer possible --
+    // which is exactly why this spec needs a REAL winner alongside the loser.
+    // Without one `winners_count` would be 0 and payout would fail on
+    // `NoWinners` before ever reaching the per-pick guess check under test.
     await program.methods
-      .settle(1)
+      .tally()
+      .accounts({ authority: authority.publicKey, config, round })
+      .remainingAccounts(
+        [winner.publicKey, loser.publicKey].map((p) => ({
+          pubkey: h.pickPda(pid, roundId, p),
+          isSigner: false,
+          isWritable: true,
+        }))
+      )
+      .rpc();
+    await program.methods
+      .settle()
       .accounts({ authority: authority.publicKey, config, round })
       .rpc();
+
+    const settled = await program.account.round.fetch(round);
+    assert.equal(settled.winnersCount, 1, "only the correct guess counted");
 
     let msg = "";
     try {
       await program.methods
         .payout()
         .accounts({
-          authority: authority.publicKey,
+          payer: authority.publicKey,
           config,
           round,
           treasury,

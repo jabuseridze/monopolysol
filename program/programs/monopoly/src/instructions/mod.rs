@@ -1,15 +1,25 @@
+pub mod close_pick;
+pub mod expire_round;
 pub mod fund_treasury;
 pub mod initialize;
 pub mod open_round;
 pub mod payout;
 pub mod reveal_and_draw;
+pub mod set_gate;
+pub mod set_params;
 pub mod settle;
+pub mod tally;
 pub mod submit_guess;
 
+pub use close_pick::*;
+pub use expire_round::*;
 pub use fund_treasury::*;
 pub use initialize::*;
 pub use open_round::*;
 pub use payout::*;
 pub use reveal_and_draw::*;
+pub use set_gate::*;
+pub use set_params::*;
 pub use settle::*;
+pub use tally::*;
 pub use submit_guess::*;

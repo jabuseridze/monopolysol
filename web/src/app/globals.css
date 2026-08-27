@@ -2,6 +2,8 @@
    is meant to look like a piece of the board rather than chrome bolted on
    over it. Do not introduce a colour that isn't already printed on the board. */
 :root {
+  --font-body: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
   --bg-0: #0b1020;
   --bg-1: #131a33;
 
@@ -11,7 +13,12 @@
   --panel-border: #280858; /* the MONOPOLY plaque purple */
 
   --text: #280858;
+  /* Lightened role: `--muted` is for genuinely secondary text only. It used to
+     carry most body copy, and at this lightness on cream that read as washed
+     out beside a saturated 3D board -- `--muted-strong` is the new default for
+     anything a player actually has to read. */
   --muted: #6f6a86;
+  --muted-strong: #4a4160;
   --accent: #e4bb47; /* the coin gold stamped beside every price */
   --accent-soft: rgba(228, 187, 71, 0.18);
   --chance: #f97216; /* the orange "?" chip */
@@ -35,8 +42,21 @@ body {
   height: 100%;
   background: radial-gradient(1200px 800px at 50% -10%, var(--bg-1), var(--bg-0));
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-body);
+  font-weight: 500;
   overflow: hidden;
+}
+
+/* Display face for anything the eye lands on first -- headings, band labels,
+   the countdown, prices, buttons. Falls back to the body stack if the font
+   fails to load, so nothing becomes invisible. */
+.display,
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), var(--font-body);
+  font-weight: 600;
+  letter-spacing: -0.01em;
 }
 
 #app-root {
@@ -67,7 +87,9 @@ body {
 }
 
 button.btn {
-  font: inherit;
+  font-family: var(--font-display), var(--font-body);
+  font-size: 14px;
+  font-weight: 600;
   color: #2a1c00;
   background: var(--accent);
   border: none;
@@ -136,4 +158,61 @@ button.btn:disabled {
     transform: translateY(105vh) rotate(720deg);
     opacity: 0.9;
   }
+}
+
+/* --- No-WebGL fallback ---------------------------------------------------- */
+/* Sits above `.overlay` (z-index 10): when the board cannot be drawn, the HUD
+   floating over the message would be noise, not information. */
+
+.nowebgl {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: linear-gradient(160deg, var(--bg-0), var(--bg-1));
+}
+
+.nowebgl-card {
+  max-width: 520px;
+  padding: 28px 30px;
+  line-height: 1.5;
+}
+
+.nowebgl-title {
+  margin: 0 0 10px;
+  font-size: 22px;
+  font-weight: 800;
+  color: var(--text);
+}
+
+.nowebgl-lede {
+  margin: 0 0 16px;
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.nowebgl-steps {
+  margin: 0;
+  padding-left: 20px;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.nowebgl-steps li + li {
+  margin-top: 10px;
+}
+
+.nowebgl-steps code {
+  background: rgba(40, 8, 88, 0.08);
+  border-radius: 4px;
+  padding: 1px 5px;
+  font-size: 13px;
+}
+
+.nowebgl-foot {
+  margin: 18px 0 0;
+  font-size: 13px;
+  color: var(--muted);
 }

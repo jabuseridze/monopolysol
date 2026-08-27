@@ -1,0 +1,21 @@
+#!/bin/sh
+# A `yarn` that is really pnpm.
+#
+# `anchor migrate` (0.30.1) hardcodes `yarn run ts-node <script>` to execute the
+# TypeScript migration -- there is no setting for it. This repo is a pnpm
+# workspace and its root package.json pins `packageManager: pnpm@…`, which
+# makes real yarn 1.x refuse to run at all ("Presence of the packageManager
+# field indicates that the project is meant to be used with Corepack"). So
+# installing yarn does not fix it, and dropping the pnpm pin to appease yarn
+# would be the tail wagging the dog.
+#
+# This shim satisfies Anchor's assumption without changing how the project is
+# actually managed. `pnpm exec` resolves binaries from node_modules/.bin
+# exactly as `yarn run` would.
+#
+# Reached only via the `migrate` script in program/package.json, which puts
+# this directory first on PATH; nothing else in the repo sees it.
+if [ "$1" = "run" ]; then
+  shift
+fi
+exec pnpm exec "$@"

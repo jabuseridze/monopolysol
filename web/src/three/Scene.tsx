@@ -52,6 +52,10 @@ export function Scene({ view }: { view: BoardView }) {
   const steps = view.walk?.steps ?? 0;
   const landedAt = at != null ? at + BEAT_WALK_AT_MS + walkDurationMs(steps) : null;
   const landedPos = view.landedTile != null ? placeTile(view.landedTile) : null;
+  // Free camera only before the roll. `at != null` covers the whole draw
+  // including the settle, so control returns once the sequence has fully
+  // unwound rather than the moment the phase flips.
+  const canPan = at == null && (view.phase === "open" || view.phase === "idle");
 
   // The coordinator advances `avatarTile` to the LANDING tile the instant it
   // emits the draw (roundPhases.ts sets `avatarTile: round.landedTile`), so
@@ -114,7 +118,7 @@ export function Scene({ view }: { view: BoardView }) {
       <Suspense fallback={null}>
         {/* Starts at lock rather than at the draw, so the crowd is already
             clear of the middle by the time the dice come down. */}
-        <Figurines count={5} clearCenter={view.phase === "locked" || at != null} />
+        <Figurines count={2} clearCenter={view.phase === "locked" || at != null} />
         <Avatar
           avatarTile={view.avatarTile}
           walk={view.walk}
@@ -125,7 +129,8 @@ export function Scene({ view }: { view: BoardView }) {
       </Suspense>
 
       {/* Dice roll at the board's centre -- that airspace is empty, the
-          MONOPOLY wordmark under it is painted into the board texture. */}
+          wordmark under it is painted into the board texture (and repainted at
+          load time by `board/centrePlaque.ts`). */}
       <Dice dice={view.dice} drawResultAt={at} />
       {/* Fires at the START OF THE SUM BEAT, not at `at`. SumFlare measures
           its own progress as `(now - triggerAt) / BEAT_SUM_MS`, so handing it
@@ -174,9 +179,23 @@ export function Scene({ view }: { view: BoardView }) {
 
       <CinematicCamera drawResultAt={at} walk={view.walk} landedTile={view.landedTile} />
 
+      {/* Panning is allowed only while guessing is open.
+          The camera orbits the board's centre, but the pads a player wants to
+          read sit out on the ring beside the avatar, so at a steep angle the
+          interesting side of the board is pushed to the frame's edge and orbit
+          alone cannot bring it back -- orbit swings the eye around a fixed
+          point, it does not move that point. Panning does, which is what makes
+          the board feel draggable rather than pinned.
+          It is switched off once the draw starts: `CinematicCamera` drives the
+          rig through the sequence and a pan mid-flight would fight it (the
+          pointerdown escape hatch there would abort the cinematic on the first
+          drag). `panSpeed` is gentle because at this zoom a 1:1 drag overshoots
+          the board entirely. */}
       <OrbitControls
         makeDefault
-        enablePan={false}
+        enablePan={canPan}
+        panSpeed={0.6}
+        screenSpacePanning={false}
         enableDamping
         target={[0, 0, 0]}
         minPolarAngle={0.15}

@@ -1,0 +1,201 @@
+/* The entry screen. Pure DOM -- it must render on a machine that cannot run
+   WebGL at all, which is where a player most needs to read the instructions. */
+
+.landing {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background: var(--bg-0);
+}
+
+/* The board art, oversized and blurred into wallpaper. `scale` past 100% hides
+   the soft edges the blur leaves at the boundary, and the slow drift keeps a
+   static image from reading as a stalled page. */
+.landing-bg {
+  position: absolute;
+  inset: -8%;
+  background: url("/board/board-art.png") center / cover no-repeat;
+  /* Was 9px, which reduced the board to an unrecognisable green-brown smear.
+     At 3px the tiles, property bands and GO corner are all readable, which is
+     the entire point of using the board as the wallpaper. */
+  filter: blur(3px) saturate(1.35) brightness(1.16);
+  transform: scale(1.08);
+  animation: landing-drift 48s ease-in-out infinite alternate;
+}
+
+@keyframes landing-drift {
+  from {
+    transform: scale(1.08) translate3d(-1.2%, -0.8%, 0) rotate(-0.6deg);
+  }
+  to {
+    transform: scale(1.14) translate3d(1.2%, 0.8%, 0) rotate(0.6deg);
+  }
+}
+
+/* Darkens the wallpaper so white card text stays legible over the board's
+   pale tiles, and warms the corners toward the app's own palette. */
+/* The board's own two colours rather than the old murky navy: the plaque
+   purple closing in at the edges, the green of the centre field glowing
+   through the middle. Dark enough at the rim to hold the card, open enough in
+   the centre to leave the board visible. */
+.landing-scrim {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(
+      70% 58% at 50% 44%,
+      rgba(170, 226, 96, 0.34) 0%,
+      rgba(120, 190, 90, 0.18) 32%,
+      rgba(60, 16, 110, 0.58) 68%,
+      rgba(26, 6, 58, 0.88) 100%
+    ),
+    linear-gradient(150deg, rgba(40, 8, 88, 0.22), rgba(20, 6, 48, 0.36));
+}
+
+.landing-card {
+  position: relative;
+  width: min(480px, 100%);
+  text-align: left;
+}
+
+.landing-body {
+  padding: 26px 30px 28px;
+}
+
+.landing-title {
+  margin: 0 0 10px;
+  font-size: 33px;
+  line-height: 1.08;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--panel-border);
+}
+
+.landing-lede {
+  margin: 0 0 20px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--muted-strong);
+}
+
+.landing-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.landing-label {
+  font-family: var(--font-display), var(--font-body);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted-strong);
+}
+
+.landing-input {
+  width: 100%;
+  padding: 11px 12px;
+  font-size: 13px;
+  border-radius: 10px;
+  border: 2px solid rgba(40, 8, 88, 0.28);
+  background: #fff;
+  color: var(--text);
+}
+
+.landing-input:focus {
+  outline: none;
+  border-color: var(--crate);
+}
+
+/* Green, because it means go. Gold stays reserved for coins and prizes, which
+   is how the board itself uses it. */
+button.landing-play {
+  width: 100%;
+  padding: 13px;
+  font-size: 17px;
+  background: var(--good);
+  color: #fff;
+  box-shadow: 0 4px 0 #1f7030;
+}
+
+button.landing-play:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+
+.landing-error {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--danger);
+}
+
+.landing-points {
+  margin: 22px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--muted-strong);
+}
+
+.landing-points strong {
+  color: var(--text);
+}
+
+/* The gold coin stamped beside every price on the board. */
+.landing-points li {
+  padding-left: 18px;
+  position: relative;
+}
+
+.landing-points li::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 6px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.landing-link {
+  color: var(--crate);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.landing-link:hover {
+  text-decoration: underline;
+}
+
+.landing-fineprint {
+  margin: 18px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid rgba(40, 8, 88, 0.12);
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--muted);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-bg {
+    animation: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .landing-body {
+    padding: 20px 20px 22px;
+  }
+  .landing-title {
+    font-size: 22px;
+  }
+}

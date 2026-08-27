@@ -12,7 +12,11 @@
 .rules-trigger {
   position: absolute;
   right: 16px;
-  top: 96px;
+  /* Tracks the wallet panel, whose height changes with its state (connected,
+     watching, address form open). `--wallet-bar-h` is published by WalletBar
+     via a ResizeObserver; the fallback covers the first paint before it is
+     measured. 16px is the panel's own top inset, 14px the gap below it. */
+  top: calc(16px + var(--wallet-bar-h, 64px) + 14px);
   width: 46px;
   height: 46px;
   padding: 0;
@@ -41,9 +45,9 @@
 .rules-card {
   position: absolute;
   right: 16px;
-  top: 148px;
+  top: calc(16px + var(--wallet-bar-h, 64px) + 72px);
   width: 344px;
-  max-height: calc(100vh - 164px);
+  max-height: calc(100vh - var(--wallet-bar-h, 64px) - 110px);
   overflow-y: auto;
   padding: 14px;
   font-size: 12.5px;

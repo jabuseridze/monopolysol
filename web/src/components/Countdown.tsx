@@ -34,8 +34,12 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 /** Colour steps for the draining ring, all sampled from the board art: the
  * centre field's green while there's time, the running track's salmon as it
  * runs down, the GO arrow's red at the wire. */
-const RING_CALM = "#c8e780";
-const RING_LOW = "#da9c77";
+/** Orange while there is time, deepening as it drains, red at the wire. The
+ * calm step used to be the board's pale green, which read as decoration against
+ * the green field behind it -- orange is the one board colour nothing else on
+ * screen competes with, so the ring is noticed without being alarming. */
+const RING_CALM = "#f97216";
+const RING_LOW = "#e2560b";
 const RING_URGENT = "#e8483c";
 
 /** Fast enough that the clock never visibly stalls, cheap enough to ignore --
@@ -95,8 +99,12 @@ export function Countdown() {
 
   return (
     <div className="panel clock">
-      <div className="clock-eyebrow">{connected ? label : "Connecting to game..."}</div>
+      {/* The phase headline moves into the band: it is what this panel IS, not
+          a caption above it. Plaque purple, because the countdown should be
+          the thing you look at first. */}
+      <div className="panel-band band-purple">{connected ? label : "Connecting to game..."}</div>
 
+      <div className="clock-body">
       <div className="clock-ring">
         <svg viewBox="0 0 132 132" aria-hidden>
           <circle className="clock-ring-track" cx="66" cy="66" r={RADIUS} fill="none" strokeWidth={STROKE} />
@@ -121,12 +129,18 @@ export function Countdown() {
         </div>
       </div>
 
-      <div className="clock-prize">
-        <span className="coin-dot" aria-hidden />
-        <span>
-          Prize pool <strong className="mono">{prize.toFixed(2)} SOL</strong>
-        </span>
-        {round ? <span className="clock-round">round #{round.roundId}</span> : null}
+      {/* Label above, figure below. Inline ("Prize pool 1.00 SOL") forced the
+          whole thing to one small size to fit the column; stacking lets the
+          number -- the part players actually read -- be large while the label
+          shrinks out of the way. */}
+      <div className="clock-meta">
+        <div className="clock-prize-label">
+          <span className="coin-dot" aria-hidden />
+          Prize pool
+        </div>
+        <div className="clock-prize-value mono">{prize.toFixed(2)} SOL</div>
+        {round ? <div className="clock-round">Round #{round.roundId}</div> : null}
+      </div>
       </div>
     </div>
   );

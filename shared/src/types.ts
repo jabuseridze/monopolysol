@@ -91,7 +91,25 @@ export interface SettledDTO {
   prizeLamports: number;
   /** Per-winner share in lamports (0 if no winners -> rolled over). */
   shareLamports: number;
-  txSignature: string | null;
+}
+
+/**
+ * Payout progress for a round, broadcast as the background queue drains.
+ *
+ * Payouts deliberately outlive the round that produced them: `settled` fires
+ * as soon as the winners are known, and the coordinator pays them off the
+ * round loop so a slow confirmation can never stall the game. That means a
+ * client learns *who won* before it learns *who has been paid*, and these
+ * arrive afterwards -- possibly while a later round is already running.
+ */
+export interface PayoutProgressDTO {
+  roundId: number;
+  /** winner base58 -> transaction signature. Grows as the queue drains. */
+  paid: Record<string, string>;
+  /** Winners the queue gave up on. They can claim manually instead. */
+  failed: string[];
+  /** True once the queue has no more work for this round. */
+  done: boolean;
 }
 
 /** Live presence broadcast: distinct online wallets + current guess tally. */
@@ -107,10 +125,42 @@ export interface ServerToClientEvents {
   "round:drawCue": (c: DrawCueDTO) => void;
   "round:drawResult": (r: DrawResultDTO) => void;
   "round:settled": (s: SettledDTO) => void;
+  "round:payouts": (p: PayoutProgressDTO) => void;
   "presence": (p: PresenceDTO) => void;
 }
 
+/** Result of a request the client asked the coordinator to perform on its
+ * behalf. `reason` is written to be shown to a player verbatim. */
+export type AckResult = { ok: true } | { ok: false; reason: string };
+
 export interface ClientToServerEvents {
-  /** Client announces (or clears) its connected wallet on connect/change. */
+  /** Client announces (or clears) its wallet address on connect/change. */
   "client:hello": (walletBase58: string | null) => void;
+
+  /**
+   * Ask the coordinator to submit a guess for a pasted address.
+   *
+   * Players do not sign: the address is typed, not connected, so the
+   * coordinator builds and pays for the transaction. The chain still verifies
+   * the address holds the game token (`token_gate.rs` reads the token
+   * account's own owner field), so this cannot be used to play as a
+   * non-holder -- but it is why the coordinator rate-limits this path.
+   */
+  "client:guess": (
+    p: { address: string; sum: number },
+    ack: (r: AckResult) => void
+  ) => void;
+
+  /**
+   * Ask the coordinator to retry payouts for a round.
+   *
+   * The safety net for walletless play: a player cannot sign a `payout`
+   * themselves, so if the coordinator's queue gave up, this is how the prize
+   * gets moved. Safe for anyone to call -- `payout` is permissionless and its
+   * destination is pinned on-chain to the winner.
+   */
+  "client:retryPayout": (
+    p: { roundId: number },
+    ack: (r: AckResult) => void
+  ) => void;
 }

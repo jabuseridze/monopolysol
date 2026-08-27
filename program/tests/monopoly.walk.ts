@@ -5,7 +5,7 @@ import { assert } from "chai";
 import { Monopoly } from "../target/types/monopoly";
 import * as h from "./helpers";
 import { landingFor, nextPrizeForLanding } from "@monopoly-sol/shared/effects";
-import { airdrop, openRevealRound, reachablePumpSum, RoundCtx } from "./roundOrchestration";
+import { airdrop, openRevealRound, reachablePumpSum, tallyAndSettle, RoundCtx } from "./roundOrchestration";
 
 const NUM_TILES = 40;
 const PRIZE = LAMPORTS_PER_SOL / 2; // 0.5 SOL
@@ -76,10 +76,7 @@ describe("monopoly: avatar walk + solvency", () => {
     const drawn = await program.account.round.fetch(round);
     assert.equal(drawn.nextPrizeLamports.toNumber(), expectedNextPrize);
 
-    await program.methods
-      .settle(0)
-      .accounts({ authority: authority.publicKey, config, round })
-      .rpc();
+    await tallyAndSettle(ctx, roundId, round, [guesser.publicKey]);
 
     const cfgAfter = await program.account.globalConfig.fetch(config);
     assert.equal(
@@ -100,7 +97,7 @@ describe("monopoly: avatar walk + solvency", () => {
       await program.methods
         .payout()
         .accounts({
-          authority: authority.publicKey,
+          payer: authority.publicKey,
           config,
           round,
           treasury,
@@ -132,14 +129,11 @@ describe("monopoly: avatar walk + solvency", () => {
       await airdrop(provider, winner, 0.1);
 
       const { roundId, round } = await openRevealRound(ctx, sum, [{ kp: winner, guess: sum }]);
-      await program.methods
-        .settle(1)
-        .accounts({ authority: authority.publicKey, config, round })
-        .rpc();
+      await tallyAndSettle(ctx, roundId, round, [winner.publicKey]);
       await program.methods
         .payout()
         .accounts({
-          authority: authority.publicKey,
+          payer: authority.publicKey,
           config,
           round,
           treasury,
@@ -170,5 +164,96 @@ describe("monopoly: avatar walk + solvency", () => {
       msg = e.toString();
     }
     assert.match(msg, /InsufficientTreasury/, "underfunded open_round must revert");
+  });
+
+  it("refuses to settle while any pick is untallied", async () => {
+    // The guard that makes `winners_count` trustworthy: without it the
+    // authority could settle having counted only a convenient subset.
+    // The solvency spec above deliberately empties the treasury, and these two
+    // run after it -- top it back up or `open_round` reverts before the
+    // behaviour under test is ever reached.
+    await program.methods
+      .fundTreasury(new anchor.BN(3 * LAMPORTS_PER_SOL))
+      .accounts({ funder: authority.publicKey, treasury, systemProgram: SystemProgram.programId })
+      .rpc();
+
+    const a = Keypair.generate();
+    const b = Keypair.generate();
+    await airdrop(provider, a);
+    await airdrop(provider, b);
+    const sum = 7;
+    const { roundId, round } = await openRevealRound(ctx, sum, [
+      { kp: a, guess: sum },
+      { kp: b, guess: sum },
+    ]);
+
+    // Tally only one of the two.
+    await program.methods
+      .tally()
+      .accounts({ authority: authority.publicKey, config, round })
+      .remainingAccounts([
+        { pubkey: h.pickPda(pid, roundId, a.publicKey), isSigner: false, isWritable: true },
+      ])
+      .rpc();
+
+    let msg = "";
+    try {
+      await program.methods
+        .settle()
+        .accounts({ authority: authority.publicKey, config, round })
+        .rpc();
+    } catch (e: any) {
+      msg = e.toString();
+    }
+    assert.match(msg, /TallyIncomplete/, "settle must wait for a complete tally");
+
+    // Finish the tally and confirm it now settles with the real count.
+    await program.methods
+      .tally()
+      .accounts({ authority: authority.publicKey, config, round })
+      .remainingAccounts([
+        { pubkey: h.pickPda(pid, roundId, b.publicKey), isSigner: false, isWritable: true },
+      ])
+      .rpc();
+    await program.methods
+      .settle()
+      .accounts({ authority: authority.publicKey, config, round })
+      .rpc();
+    const settled = await program.account.round.fetch(round);
+    assert.equal(settled.winnersCount, 2);
+  });
+
+  it("counts a pick once however many times its batch is retried", async () => {
+    // The coordinator retries batches on RPC failure, so double counting here
+    // would inflate `winners_count` and shrink every share.
+    // The solvency spec above deliberately empties the treasury, and these two
+    // run after it -- top it back up or `open_round` reverts before the
+    // behaviour under test is ever reached.
+    await program.methods
+      .fundTreasury(new anchor.BN(3 * LAMPORTS_PER_SOL))
+      .accounts({ funder: authority.publicKey, treasury, systemProgram: SystemProgram.programId })
+      .rpc();
+
+    const solo = Keypair.generate();
+    await airdrop(provider, solo);
+    const sum = 7;
+    const { roundId, round } = await openRevealRound(ctx, sum, [{ kp: solo, guess: sum }]);
+
+    const batch = {
+      pubkey: h.pickPda(pid, roundId, solo.publicKey),
+      isSigner: false,
+      isWritable: true,
+    };
+    for (let i = 0; i < 3; i++) {
+      await program.methods
+        .tally()
+        .accounts({ authority: authority.publicKey, config, round })
+        .remainingAccounts([batch])
+        .rpc();
+    }
+
+    const r = await program.account.round.fetch(round);
+    assert.equal(r.tallied, 1, "three identical batches must count one pick once");
+    assert.equal(r.winnersCount, 1);
   });
 });

@@ -3,6 +3,8 @@ import { PHASE_OPEN, PHASE_SETTLED } from "./anchorCodec.js";
 import { Chain } from "./chain.js";
 import { ClusterClock } from "./clusterClock.js";
 import { Emitter } from "./emitter.js";
+import { PayoutQueue } from "./payouts.js";
+import { PickSweeper } from "./pickSweeper.js";
 import { drawAndSettle, LoopCtx, pickingPhase } from "./roundPhases.js";
 import { openNewRound, resumeOpenRound } from "./roundOpen.js";
 
@@ -33,13 +35,51 @@ export class RoundLoop {
   private snapshot: RoundStateDTO = emptySnapshot();
   private readonly ctx: LoopCtx;
 
-  constructor(private chain: Chain, private emit: Emitter, secretPath: string) {
+  constructor(
+    private chain: Chain,
+    private emit: Emitter,
+    masterSecret: string,
+    payouts: PayoutQueue,
+    sweeper: PickSweeper
+  ) {
     const clock = new ClusterClock(chain);
-    this.ctx = { chain, emit, clock, secretPath, setState: (patch) => this.setState(patch) };
+    this.ctx = {
+      chain,
+      emit,
+      clock,
+      masterSecret,
+      payouts,
+      sweeper,
+      setState: (patch) => this.setState(patch),
+    };
   }
 
   getSnapshot(): RoundStateDTO {
     return this.snapshot;
+  }
+
+  /**
+   * Re-enqueue a settled round's unpaid winners.
+   *
+   * The recovery path for walletless play: a player who pasted an address has
+   * no key to sign `payout` with, so if the background queue exhausted its
+   * retries this is the only way the prize moves. Re-reading the winners from
+   * the chain rather than trusting a caller-supplied list is what makes it safe
+   * to expose to anyone -- and `payout` is idempotent (`pick.claimed`) and pins
+   * its destination, so a redundant call is a no-op rather than a double spend.
+   */
+  async retryPayouts(roundId: number): Promise<{ ok: true } | { ok: false; reason: string }> {
+    const round = await this.chain.getRound(roundId);
+    if (!round) return { ok: false, reason: "That round doesn't exist yet." };
+    if (round.phase !== PHASE_SETTLED) {
+      return { ok: false, reason: "That round hasn't settled yet." };
+    }
+    const { byGuess } = await this.chain.getPicks(roundId);
+    const winners = byGuess[round.diceA + round.diceB] ?? [];
+    if (winners.length === 0) return { ok: false, reason: "That round had no winners." };
+
+    this.ctx.payouts.enqueue(roundId, winners);
+    return { ok: true };
   }
 
   async run(): Promise<void> {

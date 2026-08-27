@@ -3,12 +3,26 @@ use anchor_lang::prelude::*;
 use crate::errors::GameError;
 use crate::state::{GlobalConfig, Phase, PlayerPick, Round, Treasury};
 
-/// Pay one winning pick its equal share of the prize. Authority-driven so
-/// players don't need a second transaction. Idempotent per pick via `claimed`.
+/// Pay one winning pick its equal share of the prize. Idempotent per pick via
+/// `claimed`.
+///
+/// **Permissionless: any signer may call this.** That is deliberate and safe,
+/// because the signer has no influence over where the money goes -- the
+/// destination is pinned to `pick.player` by the `address` constraint on
+/// `winner` below, the entitlement is checked against the round's own dice,
+/// and `claimed` makes a second call fail. The worst a stranger can do is pay
+/// the transaction fee to send someone else their own prize.
+///
+/// Two things depend on this being permissionless:
+/// - the coordinator pays winners in the background, off the round loop, so a
+///   slow payout can never stall the game;
+/// - a winner the coordinator failed to pay can claim it themselves from the
+///   results modal, instead of the money being silently lost.
 #[derive(Accounts)]
 pub struct Payout<'info> {
-    #[account(address = config.authority @ GameError::Unauthorized)]
-    pub authority: Signer<'info>,
+    /// Pays the transaction fee. Usually the coordinator, sometimes the
+    /// winner themselves. Intentionally unconstrained -- see the note above.
+    pub payer: Signer<'info>,
 
     #[account(seeds = [b"config"], bump = config.config_bump)]
     pub config: Account<'info, GlobalConfig>,

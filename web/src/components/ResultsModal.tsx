@@ -2,8 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { drawSequenceDurationMs, getTile, lamportsToSol } from "@monopoly-sol/shared";
-import { useWallet } from "@solana/wallet-adapter-react";
+import { solscanAccount, solscanTx } from "@monopoly-sol/shared/explorer";
+import { useIdentity } from "@/hooks/useIdentity";
+import { useRetryPayout } from "@/hooks/useRetryPayout";
 import { useGame } from "@/hooks/useGame";
+import { CLUSTER, EXPLORER_ON, TREASURY } from "@/lib/explorerLinks";
 import { Confetti } from "./Confetti";
 
 /**
@@ -16,8 +19,10 @@ import { Confetti } from "./Confetti";
 const VISIBLE_MS = 3000;
 
 export function ResultsModal() {
-  const { round, settled, drawResult } = useGame();
-  const { publicKey } = useWallet();
+  const { round, settled, drawResult, payouts } = useGame();
+  // The pasted address -- the game's only identity.
+  const identity = useIdentity();
+  const { retryPayout, pending: retryPending, error: retryError } = useRetryPayout();
   const [open, setOpen] = useState(false);
 
   const settledAt = settled?.at ?? null;
@@ -61,7 +66,14 @@ export function ResultsModal() {
   // same draw sequence) to show the winning sum.
   const dice = drawResult && drawResult.roundId === settled.roundId ? drawResult : null;
   const winningSum = dice ? dice.diceA + dice.diceB : null;
-  const youWon = publicKey ? settled.winners.includes(publicKey.toBase58()) : false;
+  const you = identity.address;
+  const youWon = you ? settled.winners.includes(you) : false;
+  // Arrives after `settled`, once the background queue has actually paid this
+  // wallet -- so "won" and "paid" are genuinely separate states now.
+  const progress = payouts?.roundId === settled.roundId ? payouts : null;
+  const yourSignature = you && progress ? progress.paid[you] ?? null : null;
+  const paidOut = yourSignature !== null;
+  const payoutFailed = !!you && !!progress?.failed.includes(you);
   const share = lamportsToSol(settled.shareLamports);
 
   return (
@@ -95,18 +107,59 @@ export function ResultsModal() {
         )}
         {youWon && (
           <div style={{ marginTop: 12, color: "var(--good)", fontWeight: 800, fontSize: 18 }}>
-            You won! Payout sent.
+            {paidOut ? "You won! Payout sent." : "You won! Paying out..."}
           </div>
         )}
-        {settled.txSignature && (
+        {/* Only offered once the coordinator has actually given up on this
+            address. Showing it while the queue is still working would invite a
+            pointless second transaction that the `claimed` flag rejects.
+
+            This asks the *server* to try again rather than signing anything:
+            the player pasted an address and holds no key. That is safe because
+            `payout` is permissionless and its destination is pinned on-chain
+            to the winner, so the worst a spurious retry can do is waste a fee. */}
+        {youWon && !paidOut && payoutFailed && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 6 }}>
+              The automatic payout didn&apos;t go through. Your {share.toFixed(4)} SOL is
+              still assigned to you on-chain — it just needs sending.
+            </div>
+            <button
+              className="btn"
+              disabled={retryPending}
+              onClick={() => void retryPayout(settled.roundId)}
+            >
+              {retryPending ? "Sending..." : "Resend payout"}
+            </button>
+            {retryError && (
+              <div style={{ color: "var(--bad)", fontSize: 12, marginTop: 6 }}>{retryError}</div>
+            )}
+          </div>
+        )}
+        {youWon && yourSignature && EXPLORER_ON && (
           <a
-            href={`https://explorer.solana.com/tx/${settled.txSignature}?cluster=devnet`}
+            href={solscanTx(yourSignature, CLUSTER)}
             target="_blank"
             rel="noreferrer"
-            style={{ display: "inline-block", marginTop: 12, color: "var(--crate)", fontSize: 12 }}
+            style={{ display: "inline-block", marginTop: 8, color: "var(--crate)", fontSize: 12 }}
           >
-            View payout on Explorer
+            View your payout on Solscan
           </a>
+        )}
+        {/* The vault the prize actually leaves from. Its Solscan page lists
+            every payout to every winner, so anyone can audit the whole game --
+            not just their own round. */}
+        {settled.winners.length > 0 && EXPLORER_ON && (
+          <div style={{ marginTop: 10 }}>
+            <a
+              href={solscanAccount(TREASURY, CLUSTER)}
+              target="_blank"
+              rel="noreferrer"
+              style={{ color: "var(--crate)", fontSize: 12 }}
+            >
+              Verify payouts on Solscan
+            </a>
+          </div>
         )}
         <div>
           <button className="btn" style={{ marginTop: 16 }} onClick={() => setOpen(false)}>
