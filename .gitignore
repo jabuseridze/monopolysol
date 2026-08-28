@@ -52,3 +52,6 @@ pnpm-debug.log*
 
 # Local tool scratch
 .playwright-mcp/
+
+# Local Claude Code state: settings + worktrees (multi-GB, with node_modules).
+.claude/
