@@ -185,9 +185,15 @@ cd web && cp .env.example .env.local
 
 ### Web → Vercel
 1. Import repo to Vercel
-2. **Root Directory:** repository root (not `web/`)
-3. **Build command** and other settings are in `vercel.json`
-4. Set env vars:
+2. **Root Directory: `web`** — not the repository root. Vercel's Next.js builder looks for
+   `next` in the Root Directory's `package.json`; the repo root has no `next` dependency, so
+   pointing it there fails the build with "No Next.js version detected".
+3. Leave **Include source files outside of the Root Directory** ON (the default). It is what
+   pulls in `shared/` and the root `pnpm-lock.yaml` so the pnpm workspace resolves.
+4. **There is deliberately no `vercel.json`.** With Root Directory set to `web`, Vercel
+   auto-detects framework, install command, build command and output directory correctly.
+   Adding one back — especially `outputDirectory` — re-breaks the build.
+5. Set env vars:
    - `NEXT_PUBLIC_RPC_URL`
    - `NEXT_PUBLIC_PROGRAM_ID`
    - `NEXT_PUBLIC_WS_URL` (Render coordinator URL)
