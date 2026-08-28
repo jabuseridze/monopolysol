@@ -190,13 +190,37 @@ cd web && cp .env.example .env.local
    pointing it there fails the build with "No Next.js version detected".
 3. Leave **Include source files outside of the Root Directory** ON (the default). It is what
    pulls in `shared/` and the root `pnpm-lock.yaml` so the pnpm workspace resolves.
-4. **There is deliberately no `vercel.json`.** With Root Directory set to `web`, Vercel
-   auto-detects framework, install command, build command and output directory correctly.
-   Adding one back — especially `outputDirectory` — re-breaks the build.
-5. Set env vars:
+4. **Framework Preset: Next.js.** `web/vercel.json` pins this (`"framework": "nextjs"`)
+   because vercel.json overrides dashboard project settings, and a preset left on "Other"
+   makes Vercel look for a static `public/` directory and fail with *No Output Directory
+   named "public" found*. That file is read from the **Root Directory**, so it only takes
+   effect once step 2 is done.
+5. There is **no `vercel.json` at the repository root**, on purpose. The original one set
+   `framework: nextjs` and `outputDirectory: web/.next` while the Root Directory was the
+   repo root; that combination is what broke the first deploys. Do not add it back — set
+   the Root Directory instead.
+6. Env vars are all **optional** now — `web/src/lib/env.ts` and `server/src/config.ts`
+   default to the deployed URLs (see "Wiring" below). Set them only to override:
    - `NEXT_PUBLIC_RPC_URL`
    - `NEXT_PUBLIC_PROGRAM_ID`
    - `NEXT_PUBLIC_WS_URL` (Render coordinator URL)
+
+   `NEXT_PUBLIC_*` values are inlined at **build** time, not read at runtime: changing one
+   in the dashboard does nothing until you redeploy.
+
+### Wiring: which URL lives where
+
+Production URLs are baked into the code so the two halves connect unconfigured:
+
+| Side | Deployed at | Reaches the other via |
+|------|-------------|-----------------------|
+| Web (Vercel) | `https://monopolysol-server.vercel.app` | `DEFAULT_WS_URL` in `web/src/lib/env.ts` |
+| Coordinator (Render) | `https://monopolysol.onrender.com` | default `corsOrigins` in `server/src/config.ts` |
+
+Note the project names are crossed: the Vercel project is called `monopolysol-server`
+but hosts the **frontend**; the Render service is called `monopolysol` but is the
+**coordinator**. Preview deployments get their own URLs and need `WEB_ORIGIN` set on
+Render to be allowed through CORS.
 
 ### Coordinator → Render
 1. **Blueprint:** `render.yaml` is ready to use
