@@ -69,9 +69,19 @@ export function loadConfig(): AppConfig {
     return Number.isFinite(n) && n > 0 ? n : dflt;
   };
 
-  const corsOrigins = (process.env.WEB_ORIGIN ?? "http://localhost:3000")
+  // The deployed frontend is baked in alongside localhost so the two halves
+  // find each other with no configuration. WEB_ORIGIN still wins when set --
+  // it is how preview deployments, which each get their own URL, get let in.
+  //
+  // Trailing slashes are stripped: a browser's `Origin` header never carries
+  // one, so "https://site.app/" pasted from the address bar matches nothing
+  // and rejects every handshake with no error worth reading.
+  const corsOrigins = (
+    process.env.WEB_ORIGIN ??
+    "http://localhost:3000,https://monopolysol-server.vercel.app"
+  )
     .split(",")
-    .map((s) => s.trim())
+    .map((s) => s.trim().replace(/\/+$/, ""))
     .filter(Boolean);
   // Required, and deliberately without a default. A generated-on-boot fallback
   // would look like it worked and then strand every in-flight round on the next

@@ -8,8 +8,29 @@ export const PROGRAM_ID = new PublicKey(
     "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
 );
 
-export const WS_URL =
-  process.env.NEXT_PUBLIC_WS_URL ?? "http://localhost:4000";
+/**
+ * The coordinator. Everything a player does goes through it.
+ *
+ * The deployed URL is baked in rather than left to configuration. It used to
+ * default to localhost, which meant a production build with the env var unset
+ * told every visitor's browser to connect to port 4000 *on their own machine*
+ * -- a failure with no error message, indistinguishable from the server being
+ * down.
+ *
+ * `NODE_ENV` picks the target: `next dev` is "development" and still points at
+ * a local coordinator, so nothing about local work changes. Note the env var is
+ * read at BUILD time and inlined into the bundle, not read at runtime, so
+ * changing it in Vercel requires a redeploy to take effect.
+ *
+ * `||` rather than `??` on purpose: an env var set to an empty string is a
+ * common deployment slip and should fall back, not produce `io("")`.
+ */
+const DEFAULT_WS_URL =
+  process.env.NODE_ENV === "production"
+    ? "https://monopolysol.onrender.com"
+    : "http://localhost:4000";
+
+export const WS_URL = process.env.NEXT_PUBLIC_WS_URL?.trim() || DEFAULT_WS_URL;
 
 /**
  * SPL mint a player must hold to play, or null when the gate is off.

@@ -5,7 +5,7 @@
   "description": "A 3D Monopoly-style game on Solana (Devnet) with provably-fair 2-minute rounds.",
   "packageManager": "pnpm@9.15.0",
   "engines": {
-    "node": ">=18"
+    "node": "24.x"
   },
   "scripts": {
     "dev:web": "pnpm --filter web dev",
