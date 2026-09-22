@@ -44,4 +44,6 @@ pub enum GameError {
     RoundNotExpired,
     #[msg("Pick does not belong to this round")]
     WrongRound,
+    #[msg("Treasury has nothing available to withdraw")]
+    NothingToWithdraw,
 }

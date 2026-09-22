@@ -176,7 +176,11 @@ cd web && cp .env.example .env.local
   - **Figurines.tsx:** Background wanderers — KayKit GLB models, **not** procedural. Two by default; each additional model is ~3.4 MB preloaded on page load (`assets.ts`).
 
 ### Program (`program/programs/monopoly/src/`)
-- **lib.rs:** Instruction handlers: `initialize`, `open_round`, `submit_guess`, `reveal_and_draw`, `settle`, `payout`, `fund_treasury`, `set_gate`, `set_params`, `close_pick`
+- **lib.rs:** Instruction handlers: `initialize`, `open_round`, `submit_guess`, `reveal_and_draw`, `settle`, `payout`, `fund_treasury`, `withdraw_treasury`, `set_gate`, `set_params`, `close_pick`
+- **withdraw_treasury.rs:** The vault's only non-prize exit, authority-only. Before it, funding the
+  treasury was a one-way door — the PDA has no key, so anything beyond what the game eventually paid
+  out was stranded. Keeps the account rent-exempt; `amount == 0` means "everything available".
+  Driven by `server/src/withdraw.ts` (`pnpm --filter server withdraw <address> [sol]`).
 - **set_params.rs:** Retune round duration and prize without wiping the chain. Before it existed the only way to change either was a fresh chain — fine locally, destructive anywhere real.
 - **token_gate.rs:** Optional SPL holder gate. Parses the token account layout **by hand** — `anchor-spl` pulls in a borsh version that conflicts with `anchor-lang`'s.
 - **tests/**: Mocha suites. `Anchor.toml` lists them explicitly and the order is load-bearing — `monopoly.gate.ts` must stay last (it arms the gate and leaves rounds unsettled).
@@ -253,6 +257,10 @@ The wallet that runs `migrate` becomes the **authority** and must sign all coord
   not funds: `payout` and `close_pick` both gate on a terminal phase.
 - **The upgrade authority is live.** Whoever holds it can replace the program and drain the
   treasury. Burn it or move it to a multisig before real money.
+- **`withdraw_treasury` cannot see outstanding prizes.** A settled round whose winners are not yet
+  paid is an obligation totalled nowhere on chain, so draining the vault leaves `payout` failing with
+  `InsufficientTreasury` and those winners unpaid. Withdraw between rounds. This is the one hazard
+  the instruction cannot check for itself.
 - **`WEB_ORIGIN` is a CORS allowlist.** Vercel preview deployments get unique URLs and will be
   blocked unless listed.
 

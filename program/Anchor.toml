@@ -8,6 +8,12 @@ skip-lint = false
 [programs.devnet]
 monopoly = "ENAjUrMvqvzjM7Fr7qM19FTpurYYAB9BzLygz8xgbL3d"
 
+# Same id on every cluster: the program keypair in target/deploy is reused, so
+# the treasury PDA (derived from the program id) keeps the same address too --
+# only its balance differs per cluster.
+[programs.mainnet]
+monopoly = "ENAjUrMvqvzjM7Fr7qM19FTpurYYAB9BzLygz8xgbL3d"
+
 [programs.localnet]
 monopoly = "ENAjUrMvqvzjM7Fr7qM19FTpurYYAB9BzLygz8xgbL3d"
 
@@ -29,4 +35,4 @@ wallet = "~/.config/solana/id.json"
 # never settles. Running it in the middle left the treasury and the round chain
 # in a state the later suites did not expect, and they failed with errors that
 # pointed at their own code rather than at the real cause.
-test = "ts-mocha -p ./tsconfig.json -t 1000000 tests/monopoly.errors.ts tests/monopoly.ts tests/monopoly.walk.ts tests/monopoly.gate.ts"
+test = "ts-mocha -p ./tsconfig.json -t 1000000 tests/monopoly.errors.ts tests/monopoly.ts tests/monopoly.walk.ts tests/monopoly.treasury.ts tests/monopoly.gate.ts"

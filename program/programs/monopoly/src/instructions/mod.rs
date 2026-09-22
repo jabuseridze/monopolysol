@@ -10,6 +10,7 @@ pub mod set_params;
 pub mod settle;
 pub mod tally;
 pub mod submit_guess;
+pub mod withdraw_treasury;
 
 pub use close_pick::*;
 pub use expire_round::*;
@@ -23,3 +24,4 @@ pub use set_params::*;
 pub use settle::*;
 pub use tally::*;
 pub use submit_guess::*;
+pub use withdraw_treasury::*;

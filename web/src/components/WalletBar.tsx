@@ -1,23 +1,27 @@
 "use client";
 
 import { useEffect, useRef } from "react";
-import { useWalletBalance } from "@/hooks/useWalletBalance";
 import { useIdentity, useWatch } from "@/hooks/useIdentity";
 
 const short = (a: string) => `${a.slice(0, 4)}..${a.slice(-4)}`;
 
 /**
- * Who you are playing as, and what that address holds.
+ * Who you are playing as.
  *
  * The address *form* used to live here too; it moved to the landing screen,
  * which is the only place it can be reached now. This is display plus an exit:
  * "Change" clears the stored address, which sends the player back to the door
  * rather than opening a second, competing input in the corner.
+ *
+ * It also used to show a SOL balance and a faucet button, and both were wrong:
+ * players need no SOL at all -- the coordinator signs and funds every pick --
+ * so the balance advertised a requirement that does not exist, and the faucet
+ * only ever worked on devnet. Removing them also took a 30-second per-browser
+ * RPC poll off the endpoint the coordinator depends on.
  */
 export function WalletBar() {
   const { address } = useIdentity();
   const { setWatched } = useWatch();
-  const { sol, airdrop, airdropping, error } = useWalletBalance();
   const ref = useRef<HTMLDivElement>(null);
 
   // The rules button sits directly beneath this panel and its height varies
@@ -49,17 +53,6 @@ export function WalletBar() {
     >
       <div className="panel-band band-good">Your wallet</div>
       <div className="panel-body wallet-body">
-      <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-        <div style={{ textAlign: "right", lineHeight: 1.1 }}>
-          <div className="mono panel-figure wallet-sol">
-            {sol == null ? "-" : sol.toFixed(3)} <span style={{ color: "var(--muted)" }}>SOL</span>
-          </div>
-          <div className="wallet-net">Devnet</div>
-        </div>
-        <button className="btn ghost" onClick={airdrop} disabled={airdropping} title="Request 1 Devnet SOL">
-          {airdropping ? "..." : "Faucet"}
-        </button>
-      </div>
       <div className="watch-row">
         <span className="watch-badge">PLAYING AS</span>
         <span className="mono watch-addr">{short(address)}</span>
@@ -67,7 +60,6 @@ export function WalletBar() {
           Change
         </button>
       </div>
-      {error && <div className="wallet-error">{error}</div>}
       </div>
     </div>
   );

@@ -139,7 +139,6 @@ export function Countdown() {
           Prize pool
         </div>
         <div className="clock-prize-value mono">{prize.toFixed(2)} SOL</div>
-        {round ? <div className="clock-round">Round #{round.roundId}</div> : null}
       </div>
       </div>
     </div>

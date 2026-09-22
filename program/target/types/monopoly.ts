@@ -936,6 +936,82 @@ export type Monopoly = {
         }
       ],
       "args": []
+    },
+    {
+      "name": "withdrawTreasury",
+      "docs": [
+        "Authority moves SOL back out of the vault. `amount == 0` withdraws",
+        "everything above the rent floor. Funding was one-way before this."
+      ],
+      "discriminator": [
+        40,
+        63,
+        122,
+        158,
+        144,
+        216,
+        83,
+        96
+      ],
+      "accounts": [
+        {
+          "name": "authority",
+          "signer": true
+        },
+        {
+          "name": "config",
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  99,
+                  111,
+                  110,
+                  102,
+                  105,
+                  103
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "treasury",
+          "writable": true,
+          "pda": {
+            "seeds": [
+              {
+                "kind": "const",
+                "value": [
+                  116,
+                  114,
+                  101,
+                  97,
+                  115,
+                  117,
+                  114,
+                  121
+                ]
+              }
+            ]
+          }
+        },
+        {
+          "name": "destination",
+          "docs": [
+            "Deliberately unconstrained -- the authority is withdrawing its own",
+            "float and may want it somewhere other than the signing wallet."
+          ],
+          "writable": true
+        }
+      ],
+      "args": [
+        {
+          "name": "amount",
+          "type": "u64"
+        }
+      ]
     }
   ],
   "accounts": [
@@ -1097,6 +1173,11 @@ export type Monopoly = {
       "code": 6020,
       "name": "wrongRound",
       "msg": "Pick does not belong to this round"
+    },
+    {
+      "code": 6021,
+      "name": "nothingToWithdraw",
+      "msg": "Treasury has nothing available to withdraw"
     }
   ],
   "types": [

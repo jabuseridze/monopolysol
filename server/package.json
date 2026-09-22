@@ -10,6 +10,7 @@
     "build": "tsc --noEmit",
     "start": "tsx src/index.ts",
     "refill": "tsx src/refill.ts",
+    "withdraw": "tsx src/withdraw.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

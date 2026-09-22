@@ -91,4 +91,10 @@ pub mod monopoly {
     ) -> Result<()> {
         instructions::set_params::handler(ctx, prize_lamports, round_duration)
     }
+
+    /// Authority moves SOL back out of the vault. `amount == 0` withdraws
+    /// everything above the rent floor. Funding was one-way before this.
+    pub fn withdraw_treasury(ctx: Context<WithdrawTreasury>, amount: u64) -> Result<()> {
+        instructions::withdraw_treasury::handler(ctx, amount)
+    }
 }
