@@ -1,7 +1,17 @@
 import { PublicKey } from "@solana/web3.js";
 
+/**
+ * `?.trim() ||`, not `??`.
+ *
+ * `??` falls back only on null/undefined, so an env var set to an empty string
+ * -- which is exactly what a hosting dashboard produces when someone saves a
+ * blank field -- passes straight through. `new Connection("")` then throws
+ * `Endpoint URL must start with http: or https:` during the static prerender,
+ * failing the whole build with an error that names neither the variable nor
+ * the file. `WS_URL` below always had the safe form; this was the odd one out.
+ */
 export const RPC_URL =
-  process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
+  process.env.NEXT_PUBLIC_RPC_URL?.trim() || "https://api.devnet.solana.com";
 
 /* `NEXT_PUBLIC_PROGRAM_ID` is deliberately gone. There is no on-chain program
    any more, so nothing derived an address from it -- leaving the variable in
