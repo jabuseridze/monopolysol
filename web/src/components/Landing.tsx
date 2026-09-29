@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { solscanAccount } from "@monopoly-sol/shared/explorer";
 import { useWatch } from "@/hooks/useIdentity";
-import { BOARD_NAME } from "@/three/board/centrePlaque";
 import { CLUSTER, EXPLORER_ON, GATE_MINT_ADDRESS } from "@/lib/explorerLinks";
 
 /**
@@ -19,6 +18,59 @@ import { CLUSTER, EXPLORER_ON, GATE_MINT_ADDRESS } from "@/lib/explorerLinks";
  * that cannot run the board at all, which is exactly where a player is most
  * likely to need to read what this game wants from them.
  */
+/**
+ * The name, curved into the banner painted across the hero art.
+ *
+ * The `viewBox` is the hero image's own 1024x572, and the SVG is stretched over
+ * `.landing-hero` -- which is itself sized to exactly that aspect ratio. So one
+ * SVG user unit is one image pixel at every window size, and the path
+ * coordinates below could be read straight off the artwork. Nothing here can
+ * drift off the sign as the window changes, which a viewport-relative position
+ * could not promise.
+ *
+ * `<textPath>` rather than rotating letters individually: the plaque's rails
+ * bow away from centre (top rises ~33px mid-span, bottom drops ~23px), and
+ * per-letter rotation approximates that curve while destroying kerning.
+ */
+function Wordmark() {
+  // Sits inside the plaque's interior and follows the top rail's rise.
+  // Ends low, centre high, following the top rail's rise. The control point
+  // is pulled well past the visual apex because a quadratic only reaches a
+  // quarter of the way toward it: mid-curve y is (y0 + 2*yc + y1) / 4.
+  const BASELINE = "M 252 180 Q 516 124 780 180";
+  return (
+    <svg className="landing-wordmark" viewBox="0 0 1024 572" aria-hidden focusable="false">
+      <defs>
+        <path id="wordmark-arc" d={BASELINE} />
+        <linearGradient
+          id="sol-gradient"
+          gradientUnits="userSpaceOnUse"
+          x1="626" y1="106" x2="748" y2="178"
+        >
+          <stop offset="5%" stopColor="#9945ff" />
+          <stop offset="52%" stopColor="#19d3f5" />
+          <stop offset="95%" stopColor="#14f195" />
+        </linearGradient>
+      </defs>
+
+      {/* SVG has no text-shadow, so the bevel is a second copy of the same text
+          on the same path, nudged down and filled gold. */}
+      <text className="wm-text wm-bevel" dy="2.5">
+        <textPath href="#wordmark-arc" startOffset="50%" textAnchor="middle">
+          MONOPOLY<tspan className="wm-gem"> ◆ </tspan>SOL
+        </textPath>
+      </text>
+      <text className="wm-text">
+        <textPath href="#wordmark-arc" startOffset="50%" textAnchor="middle">
+          <tspan className="wm-main">MONOPOLY</tspan>
+          <tspan className="wm-gem"> ◆ </tspan>
+          <tspan className="wm-sol">SOL</tspan>
+        </textPath>
+      </text>
+    </svg>
+  );
+}
+
 export function Landing() {
   const { setWatched, error } = useWatch();
   const [draft, setDraft] = useState("");
@@ -37,17 +89,21 @@ export function Landing() {
           into the art when the window is resized. */}
       <div className="landing-stage" aria-hidden>
         <div className="landing-hero">
-          <div className="landing-wordmark">
-            <span className="wordmark-main">MONOPOLY</span>
-            <span className="wordmark-gem">◆</span>
-            <span className="wordmark-sol">SOL</span>
-          </div>
+          <Wordmark />
         </div>
         <div className="landing-scrim" />
       </div>
 
+      {/* Narrow screens crop the artwork to the plaque's empty interior, and
+          the curved wordmark is hidden there because the sign runs off-frame --
+          which left the whole top half blank and unbranded. This flat copy
+          fills that gap; it is the same name, just without the arc it has no
+          room for. */}
+      <div className="landing-wordmark-sm" aria-hidden>
+        MONOPOLY<span className="wm-sm-gem">◆</span><span className="wm-sm-sol">SOL</span>
+      </div>
+
       <div className="panel landing-card">
-        <div className="panel-band band-purple">{BOARD_NAME} · Solana</div>
         <div className="landing-body">
         <h1 className="landing-title">Guess the dice. Split the pot.</h1>
         <p className="landing-lede">
@@ -81,34 +137,24 @@ export function Landing() {
           </button>
         </form>
 
+        {/* Three promises at a glance rather than three sentences. The card
+            sits in front of artwork that is doing most of the persuading, so
+            the copy's job is to be scannable, not complete. The token link
+            survives because holding the coin is the one prerequisite a
+            newcomer has to act on. */}
         <ul className="landing-points">
+          <li>No wallet</li>
           <li>
-            <strong>No wallet connection.</strong> Nothing to install, nothing to
-            sign — just the address.
-          </li>
-          <li>
-            <strong>Holders only.</strong> That address must hold{" "}
             {tokenLink ? (
               <a href={tokenLink} target="_blank" rel="noreferrer" className="landing-link">
-                the game token ↗
+                Holders only ↗
               </a>
             ) : (
-              "the game token"
-            )}{" "}
-            to guess.
+              "Holders only"
+            )}
           </li>
-          <li>
-            <strong>Prizes go straight to you.</strong> Winnings are sent to the
-            address you type here, automatically.
-          </li>
+          <li>Paid instantly</li>
         </ul>
-
-        {/* Says plainly what an address can and cannot do here, so nobody
-            pastes one thinking it is a login they need to protect. */}
-        <p className="landing-fineprint">
-          Your address is public information — it is only used to check the
-          token and to send winnings. It can&apos;t move your funds.
-        </p>
         </div>
       </div>
     </main>

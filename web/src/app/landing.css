@@ -10,7 +10,9 @@
      into the lower two-thirds lets the sign read and drops the card onto the
      calm board area the art was composed to leave empty. */
   place-items: start center;
-  padding: clamp(150px, 27vh, 300px) 24px 24px;
+  /* Clears the plaque, whose interior ends at y=205 of the 572-unit artwork --
+     i.e. 36% down the hero. Anything less and the card covers the sign. */
+  padding: clamp(190px, 38vh, 400px) 24px 24px;
   overflow: auto;
   background: var(--bg-0);
 }
@@ -58,14 +60,39 @@
     );
 }
 
+/* A title deed rather than a dialog.
+ *
+ * `.panel` gives every box in the app a cream face and a flat purple hairline,
+ * which is right in the HUD and wrong here: in front of a glossy 3D scene a
+ * flat rectangle reads as a hole cut in the artwork. So the card becomes the
+ * FRAME -- a gold bevel, built like the plaque above it -- and `.landing-body`
+ * becomes the face it holds. Both `.panel` properties are overridden on
+ * purpose; leaving either in place puts a purple line around the gold. */
 .landing-card {
   position: relative;
-  width: min(480px, 100%);
+  width: min(460px, 100%);
   text-align: left;
+  padding: 7px;
+  border: 0;
+  border-radius: 22px;
+  background: linear-gradient(158deg, #f7e2a4 0%, #d9ac42 34%, #a87b22 68%, #6f4c12 100%);
+  box-shadow:
+    /* the bevel's own lip */
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.28),
+    /* lifted off the art rather than pasted onto it */
+    0 18px 38px rgba(12, 3, 32, 0.5),
+    0 3px 10px rgba(12, 3, 32, 0.35);
 }
 
 .landing-body {
-  padding: 20px 26px 22px;
+  padding: 22px 26px 20px;
+  border-radius: 16px;
+  background: var(--panel);
+  /* A recess, not a sticker: the face sits down inside the frame. */
+  box-shadow:
+    inset 0 3px 7px rgba(40, 8, 88, 0.16),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.8);
 }
 
 .landing-title {
@@ -135,38 +162,38 @@ button.landing-play:hover:not(:disabled) {
   color: var(--danger);
 }
 
+/* Three chips in a row, not three sentences stacked. The artwork does the
+   persuading; these just have to be scannable. */
 .landing-points {
-  margin: 22px 0 0;
+  margin: 18px 0 0;
   padding: 0;
   list-style: none;
   display: flex;
-  flex-direction: column;
-  gap: 9px;
-  font-size: 12.5px;
-  line-height: 1.45;
-  color: var(--muted-strong);
+  flex-wrap: wrap;
+  gap: 7px;
 }
 
-.landing-points strong {
-  color: var(--text);
-}
-
-/* The gold coin stamped beside every price on the board. */
 .landing-points li {
-  padding-left: 18px;
-  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 11px;
+  border-radius: 999px;
+  border: 1.5px solid rgba(40, 8, 88, 0.14);
+  background: rgba(40, 8, 88, 0.045);
+  font-family: var(--font-display), var(--font-body);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted-strong);
+  white-space: nowrap;
 }
 
+/* The gold diamond from the banner, tying the chips to the sign above. */
 .landing-points li::before {
-  content: "";
-  position: absolute;
-  left: 0;
-  top: 6px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: 0 0 0 2px var(--accent-soft);
+  content: "\25c6";
+  color: var(--accent);
+  font-size: 8px;
+  line-height: 1;
 }
 
 .landing-link {
@@ -177,15 +204,6 @@ button.landing-play:hover:not(:disabled) {
 
 .landing-link:hover {
   text-decoration: underline;
-}
-
-.landing-fineprint {
-  margin: 18px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid rgba(40, 8, 88, 0.12);
-  font-size: 11px;
-  line-height: 1.45;
-  color: var(--muted);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -205,70 +223,92 @@ button.landing-play:hover:not(:disabled) {
 
 /* --- The wordmark, seated in the plaque painted into the hero art -------- */
 
-/* Positioned as a share of `.landing-hero`, not the viewport, so it stays
-   inside the sign at every window size. The percentages are measured off the
-   source image: the plaque's flat interior spans roughly 23%-77% across and
-   centres on 22% down. */
+/* Stretched over the whole hero so the SVG's 1024x572 viewBox lines up with
+   the artwork one-to-one. The path coordinates in `Wordmark` are therefore
+   image pixels, and stay aligned at any window size. */
 .landing-wordmark {
   position: absolute;
-  left: 50%;
-  top: 21.5%;
-  translate: -50% -50%;
-  width: 50%;
-  display: flex;
-  align-items: baseline;
-  justify-content: center;
-  gap: 0.14em;
-  /* Scales with the art rather than the root font size -- the plaque is a
-     fixed share of the image, so the text has to be too or it outgrows the
-     frame on a wide monitor. */
-  font-size: min(5.6cqw, 4.4vw);
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  pointer-events: none;
+}
+
+.wm-text {
   font-family: var(--font-display), var(--font-body);
+  /* User units, i.e. source-image pixels. Sized so the whole string spans
+     roughly the plaque's 580px interior width -- at 76px it ran to ~1270px and
+     hung "SOL" off both ends of the sign. */
+  font-size: 56px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+/* The bevel copy, sitting one nudge below the face. */
+.wm-bevel {
+  fill: #7d5413;
+}
+
+.wm-main {
+  fill: #f6f1e0;
+}
+
+.wm-sol {
+  fill: url(#sol-gradient);
+  /* The gradient is the one cue that says which chain this is, so SOL is
+     given a touch more air than the tighter MONOPOLY. */
+  letter-spacing: 1.5px;
+}
+
+/* Smaller and gold: doing the job a space would, in a plaque with no room
+   for one. `baseline-shift` lifts it to optical centre against the caps. */
+.wm-gem {
+  fill: var(--accent);
+  font-size: 0.45em;
+  baseline-shift: 22%;
+}
+
+/* The flat stand-in, shown only where the curved one cannot be. */
+.landing-wordmark-sm {
+  display: none;
+  position: relative;
+  margin-bottom: 18px;
+  font-family: var(--font-display), var(--font-body);
+  font-size: clamp(30px, 9vw, 44px);
   font-weight: 700;
   line-height: 1;
-  white-space: nowrap;
-  user-select: none;
-}
-
-.landing-hero {
-  container-type: inline-size;
-}
-
-/* MONOPOLY: cream face with a gold bevel under it, echoing the letterpress on
-   the board's own centre plaque. */
-.wordmark-main {
+  letter-spacing: 0.01em;
   color: #f6f1e0;
-  letter-spacing: 0.005em;
-  text-shadow:
-    0 0.035em 0 #b8862a,
-    0 0.07em 0 #8a5f17,
-    0 0.1em 0.08em rgba(0, 0, 0, 0.45);
+  text-shadow: 0 2px 0 #7d5413, 0 4px 10px rgba(0, 0, 0, 0.55);
+  text-align: center;
 }
 
-/* SOL: the one word that says which chain this is, so it gets the chain's own
-   colours rather than more gold. Reading "MONOPOLYSOL" as a single word was
-   the thing to avoid -- the gradient plus the divider break it in two without
-   needing a space, which the plaque has no room for. */
-.wordmark-sol {
-  background: linear-gradient(100deg, #9945ff 8%, #19d3f5 52%, #14f195 92%);
+.wm-sm-gem {
+  color: var(--accent);
+  font-size: 0.42em;
+  vertical-align: 0.42em;
+  margin: 0 0.18em;
+}
+
+.wm-sm-sol {
+  background: linear-gradient(100deg, #9945ff 6%, #19d3f5 50%, #14f195 94%);
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  letter-spacing: 0.02em;
-  /* A shadow cannot sit under transparent text, so the depth comes from a
-     drop-shadow filter on the painted glyphs instead. */
-  filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.55));
-}
-
-/* The diamond from the coin art, doing the job a space would. */
-.wordmark-gem {
-  color: var(--accent);
-  font-size: 0.42em;
-  transform: translateY(-0.55em);
-  filter: drop-shadow(0 0.06em 0.06em rgba(0, 0, 0, 0.5));
+  /* A text-shadow cannot sit under transparent glyphs. */
+  text-shadow: none;
+  filter: drop-shadow(0 2px 0 #4a2a70) drop-shadow(0 4px 8px rgba(0, 0, 0, 0.5));
 }
 
 @media (max-width: 720px) {
+  .landing-wordmark-sm {
+    display: block;
+  }
+  /* The card no longer has to clear a sign that is not on screen. */
+  .landing {
+    padding-top: clamp(60px, 14vh, 130px);
+  }
   /* The plaque crops off-screen on a narrow viewport; the card's own band
      carries the name there instead. */
   .landing-wordmark {
