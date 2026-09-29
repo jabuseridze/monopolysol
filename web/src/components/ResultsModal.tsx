@@ -13,10 +13,15 @@ import { Confetti } from "./Confetti";
  * How long the result stays up. The show/hide timers below are the sole owner
  * of that: this used to also close the instant the next round opened, which
  * the coordinator does only ~600ms after the choreography ends -- so the
- * announcement flashed up and vanished before it could be read. Covering the
- * first ~2.4s of a 100-second guessing window costs nothing by comparison.
+ * announcement flashed up and vanished before it could be read.
+ *
+ * Six seconds rather than three because the card carries links worth
+ * following (a payout signature, the paying wallet) and three seconds was not
+ * long enough to read the card *and* decide to click one -- which made those
+ * links decorative. It still covers only the first ~6s of a 100-second
+ * guessing window.
  */
-const VISIBLE_MS = 3000;
+const VISIBLE_MS = 6000;
 
 export function ResultsModal() {
   const { round, settled, drawResult, payouts } = useGame();
@@ -39,10 +44,9 @@ export function ResultsModal() {
     if (!settled) return;
     setOpen(false);
 
-    // `settled` fires when the last on-chain payout confirms, which with zero
-    // winners can be ~1s after the draw -- i.e. while the dice are still
-    // tumbling. Announcing then spoils the whole reveal. Hold the result
-    // until the choreography has actually finished playing.
+    // `settled` fires as soon as the round is decided, which can be while the
+    // dice are still tumbling. Announcing then spoils the whole reveal. Hold
+    // the result until the choreography has actually finished playing.
     const steps = sameRound ? drawResult!.diceA + drawResult!.diceB : 0;
     const choreographyEndsAt = sameRound
       ? drawResult!.at + drawSequenceDurationMs(steps)
@@ -69,103 +73,105 @@ export function ResultsModal() {
   const you = identity.address;
   const youWon = you ? settled.winners.includes(you) : false;
   // Arrives after `settled`, once the background queue has actually paid this
-  // wallet -- so "won" and "paid" are genuinely separate states now.
+  // wallet -- so "won" and "paid" are genuinely separate states.
   const progress = payouts?.roundId === settled.roundId ? payouts : null;
   const yourSignature = you && progress ? progress.paid[you] ?? null : null;
-  const paidOut = yourSignature !== null;
   const payoutFailed = !!you && !!progress?.failed.includes(you);
   const share = lamportsToSol(settled.shareLamports);
+  const others = settled.winners.length - 1;
 
   return (
-    <div style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "rgba(4,7,18,0.45)" }}>
+    <div className="results-scrim">
       {youWon && <Confetti />}
-      <div className="panel" style={{ padding: 26, width: 360, textAlign: "center" }}>
-        <div style={{ fontSize: 12, letterSpacing: "0.16em", textTransform: "uppercase", color: "var(--muted)" }}>
-          Round #{settled.roundId} result
-        </div>
-        {dice && (
-          <div style={{ fontSize: 13, color: "var(--muted)" }}>
-            Dice rolled {dice.diceA} + {dice.diceB} = {winningSum}
-          </div>
-        )}
-        <div style={{ fontSize: 26, fontWeight: 800, color: "var(--panel-border)", margin: "6px 0" }}>
-          Landed on {tile?.name ?? `Tile ${settled.landedTile}`}
-        </div>
-        {settled.winners.length === 0 ? (
-          // No rollover: `settle.rs` dropped the accumulation branch in the
-          // dice-walk pivot, so an unclaimed prize simply stays in the wallet.
-          <div style={{ color: "var(--muted)" }}>Nobody guessed it - the prize rolls on.</div>
-        ) : (
-          <div style={{ fontSize: 15 }}>
-            {settled.winners.length} winner{settled.winners.length > 1 ? "s" : ""} guessed{" "}
-            <span className="mono" style={{ fontWeight: 700 }}>{winningSum}</span> and split{" "}
-            <span className="mono" style={{ fontWeight: 700 }}>{lamportsToSol(settled.prizeLamports).toFixed(2)} SOL</span>
-            <div style={{ marginTop: 6 }}>
-              <span className="mono">{share.toFixed(4)} SOL</span> each
-            </div>
-          </div>
-        )}
-        {youWon && (
-          <div style={{ marginTop: 12, color: "var(--good)", fontWeight: 800, fontSize: 18 }}>
-            {paidOut ? "You won! Payout sent." : "You won! Paying out..."}
-          </div>
-        )}
-        {/* Only offered once the coordinator has actually given up on this
-            address. Showing it while the queue is still working would invite a
-            pointless second transaction that the `claimed` flag rejects.
+      <div className="panel results-card">
+        <div className="panel-band band-purple">Round {settled.roundId}</div>
+        <div className="results-body">
+          <div className="results-sum">{winningSum ?? "-"}</div>
+          <div className="results-sum-label">Winning sum</div>
 
-            This asks the *server* to try again rather than signing anything:
-            the player pasted an address and holds no key. That is safe because
-            `payout` is permissionless and its destination is pinned on-chain
-            to the winner, so the worst a spurious retry can do is waste a fee. */}
-        {youWon && !paidOut && payoutFailed && (
-          <div style={{ marginTop: 10 }}>
-            <div style={{ color: "var(--muted)", fontSize: 12, marginBottom: 6 }}>
-              The automatic payout didn&apos;t go through. Your {share.toFixed(4)} SOL is
-              still assigned to you on-chain — it just needs sending.
+          <div className="results-tile">
+            <small>Landed on</small>
+            {tile?.name ?? `Tile ${settled.landedTile}`}
+          </div>
+
+          <div className="results-rule" />
+
+          {settled.winners.length === 0 ? (
+            // No rollover: an unclaimed prize simply stays in the wallet.
+            <div className="results-nobody">Nobody guessed it — the prize rolls on.</div>
+          ) : youWon ? (
+            <>
+              <div className="results-you-won">You won</div>
+              <div className="results-amount">{share.toFixed(3)} SOL</div>
+              {/* Says who you shared with, not just how many won -- "split with
+                  2 others" answers the question a winner actually has when the
+                  number is smaller than the prize they watched. */}
+              <div className="results-split">
+                {others === 0
+                  ? "You were the only winner."
+                  : `Split with ${others} other winner${others > 1 ? "s" : ""}.`}
+              </div>
+              {!yourSignature && !payoutFailed && (
+                <div className="results-pending">Sending your payout…</div>
+              )}
+            </>
+          ) : (
+            <div className="results-nobody">
+              {settled.winners.length} player{settled.winners.length > 1 ? "s" : ""} guessed it
+              {" — "}
+              <strong>{share.toFixed(3)} SOL</strong> each.
             </div>
-            <button
-              className="btn"
-              disabled={retryPending}
-              onClick={() => void retryPayout(settled.roundId)}
-            >
-              {retryPending ? "Sending..." : "Resend payout"}
-            </button>
-            {retryError && (
-              <div style={{ color: "var(--bad)", fontSize: 12, marginTop: 6 }}>{retryError}</div>
+          )}
+
+          {/* Only offered once the coordinator has actually given up on this
+              address. Showing it while the queue is still working would invite
+              a pointless second send, which `picks.paid` rejects anyway. */}
+          {youWon && payoutFailed && (
+            <div className="results-retry">
+              <div className="results-retry-note">
+                The automatic payout didn&apos;t go through. Your {share.toFixed(3)} SOL is
+                still recorded as yours — it just needs sending.
+              </div>
+              <button
+                className="btn"
+                disabled={retryPending}
+                onClick={() => void retryPayout(settled.roundId)}
+              >
+                {retryPending ? "Sending…" : "Resend payout"}
+              </button>
+              {retryError && <div className="results-error">{retryError}</div>}
+            </div>
+          )}
+
+          <div className="results-links">
+            {youWon && yourSignature && EXPLORER_ON && (
+              <a
+                className="results-link"
+                href={solscanTx(yourSignature, CLUSTER)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                Your payout ↗
+              </a>
             )}
+            {/* The wallet the prize leaves from. Its Solscan page lists every
+                payout to every winner, so anyone can audit the whole game --
+                not just their own round. Read from live round state, not env:
+                only the server knows which wallet is paying. */}
+            {settled.winners.length > 0 && EXPLORER_ON && round?.payoutWallet && (
+              <a
+                className="results-link"
+                href={solscanAccount(round.payoutWallet, CLUSTER)}
+                target="_blank"
+                rel="noreferrer"
+              >
+                All payouts ↗
+              </a>
+            )}
+            <button className="btn" onClick={() => setOpen(false)}>
+              Close
+            </button>
           </div>
-        )}
-        {youWon && yourSignature && EXPLORER_ON && (
-          <a
-            href={solscanTx(yourSignature, CLUSTER)}
-            target="_blank"
-            rel="noreferrer"
-            style={{ display: "inline-block", marginTop: 8, color: "var(--crate)", fontSize: 12 }}
-          >
-            View your payout on Solscan
-          </a>
-        )}
-        {/* The wallet the prize actually leaves from. Its Solscan page lists
-            every payout to every winner, so anyone can audit the whole game --
-            not just their own round. Read from live round state, not env: only
-            the server knows which wallet is paying. */}
-        {settled.winners.length > 0 && EXPLORER_ON && round?.payoutWallet && (
-          <div style={{ marginTop: 10 }}>
-            <a
-              href={solscanAccount(round.payoutWallet, CLUSTER)}
-              target="_blank"
-              rel="noreferrer"
-              style={{ color: "var(--crate)", fontSize: 12 }}
-            >
-              Verify payouts on Solscan
-            </a>
-          </div>
-        )}
-        <div>
-          <button className="btn" style={{ marginTop: 16 }} onClick={() => setOpen(false)}>
-            Close
-          </button>
         </div>
       </div>
     </div>

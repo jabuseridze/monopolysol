@@ -45,40 +45,28 @@ const HOME_EPSILON = 0.15;
  * to variable frame rate.
  *
  * Safety contract: this takes over `OrbitControls` input for the sequence
- * and MUST hand it back cleanly. Four independent triggers restore control:
- * (1) the sequence reaching "done", (2) unmount, (3) `drawResultAt` changing
- * mid-flight (a new round), and (4) the user directly touching the canvas
- * (pointerdown/wheel) -- an explicit escape hatch so an impatient player is
- * never fought for the camera. A try/catch around the per-frame work also
- * restores control defensively on any unexpected error rather than leaving
- * `controls.enabled` stuck at `false`.
+ * and MUST hand it back cleanly. Three independent triggers restore control:
+ * (1) the sequence reaching "done", (2) unmount, and (3) `drawResultAt`
+ * changing mid-flight (a new round). A try/catch around the per-frame work
+ * also restores control defensively on any unexpected error rather than
+ * leaving `controls.enabled` stuck at `false`.
+ *
+ * There used to be a fourth: any pointerdown or wheel on the canvas aborted
+ * the cinematic, so an impatient player was never fought for the camera. It
+ * was removed because it fired on a *stray* drag too -- brushing the canvas
+ * mid-roll cut the dice reveal dead, which read as the animation breaking
+ * rather than as handing back control. The sequence is short and bounded, so
+ * the wait it protected against was never long enough to be worth that.
  */
 export function CinematicCamera({ drawResultAt, walk, landedTile }: Props) {
   const camera = useThree((s) => s.camera);
   const controls = useThree((s) => s.controls) as unknown as ControlsLike | null;
-  const gl = useThree((s) => s.gl);
 
   const active = useRef(false);
-  const cancelled = useRef(false);
   const shakeClock = useRef(0);
   const homingMs = useRef(0);
   const preludePos = useRef(new THREE.Vector3());
   const preludeTarget = useRef(new THREE.Vector3());
-
-  // Escape hatch: any direct user interaction with the canvas aborts the
-  // cinematic and hands control back on the next frame.
-  useEffect(() => {
-    const dom = gl.domElement;
-    const abort = () => {
-      if (active.current) cancelled.current = true;
-    };
-    dom.addEventListener("pointerdown", abort);
-    dom.addEventListener("wheel", abort, { passive: true });
-    return () => {
-      dom.removeEventListener("pointerdown", abort);
-      dom.removeEventListener("wheel", abort);
-    };
-  }, [gl]);
 
   // Unmount, or `drawResultAt` changing (a new round arriving mid-flight):
   // restore control synchronously rather than waiting for the next frame.
@@ -97,7 +85,7 @@ export function CinematicCamera({ drawResultAt, walk, landedTile }: Props) {
       const beat = computeDrawBeat(Date.now(), drawResultAt, walk?.steps ?? 0);
       const inSequence = drawResultAt != null && beat.beat !== "idle" && beat.beat !== "done";
 
-      if (inSequence && !active.current && !cancelled.current) {
+      if (inSequence && !active.current) {
         active.current = true;
         controls.enabled = false;
         homingMs.current = 0;
@@ -105,38 +93,29 @@ export function CinematicCamera({ drawResultAt, walk, landedTile }: Props) {
         preludeTarget.current.copy(controls.target);
       }
 
-      if (!inSequence || cancelled.current) {
+      if (!inSequence) {
         if (active.current) {
-          // The user grabbed the camera: hand it straight back, wherever it is.
-          // Fighting them to finish a move is worse than an abrupt cut.
-          if (cancelled.current) {
+          // The sequence ended. The final beat eases toward the resting pose,
+          // but the damped chase always lags it -- so at "done" the camera is
+          // still short of home, and simply restoring control here strands the
+          // player on the celebration's close-up with the board cropped and
+          // half the guess pads off screen. Keep flying until it arrives.
+          homingMs.current += dt * 1000;
+          const k = 1 - Math.pow(0.001, dt * CHASE_RATE);
+          camera.position.lerp(preludePos.current, k);
+          controls.target.lerp(preludeTarget.current, k);
+          controls.update();
+          const arrived =
+            camera.position.distanceTo(preludePos.current) < HOME_EPSILON &&
+            controls.target.distanceTo(preludeTarget.current) < HOME_EPSILON;
+          if (arrived || homingMs.current > HOME_MAX_MS) {
+            camera.position.copy(preludePos.current);
+            controls.target.copy(preludeTarget.current);
+            controls.update();
             controls.enabled = true;
             active.current = false;
-          } else {
-            // The sequence ended. The final beat eases toward the resting pose,
-            // but the damped chase always lags it -- so at "done" the camera is
-            // still short of home, and simply restoring control here strands the
-            // player on the celebration's close-up with the board cropped and
-            // half the guess pads off screen. Keep flying until it arrives.
-            homingMs.current += dt * 1000;
-            const k = 1 - Math.pow(0.001, dt * CHASE_RATE);
-            camera.position.lerp(preludePos.current, k);
-            controls.target.lerp(preludeTarget.current, k);
-            controls.update();
-            const arrived =
-              camera.position.distanceTo(preludePos.current) < HOME_EPSILON &&
-              controls.target.distanceTo(preludeTarget.current) < HOME_EPSILON;
-            if (arrived || homingMs.current > HOME_MAX_MS) {
-              camera.position.copy(preludePos.current);
-              controls.target.copy(preludeTarget.current);
-              controls.update();
-              controls.enabled = true;
-              active.current = false;
-            }
-            return;
           }
         }
-        if (!inSequence) cancelled.current = false; // rearm for the next round
         return;
       }
 

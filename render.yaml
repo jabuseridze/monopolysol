@@ -1,40 +1,73 @@
 # Render blueprint for the realtime coordinator (persistent Node process).
 # The web frontend deploys separately to Vercel.
+#
+# NOT the free plan, deliberately: free services sleep after ~15 minutes with
+# no HTTP traffic. This is not a request/response API — it is a loop that must
+# be awake every round to reveal, settle and pay. Asleep, rounds simply stop.
 services:
   - type: web
-    name: monopoly-sol-coordinator
+    name: monopolysol
     runtime: node
     plan: starter
+    # Must stay the repo root, not `server/`. This is a pnpm workspace and the
+    # server depends on `@monopoly-sol/shared` via `workspace:*`; checking out
+    # only `server/` leaves that unresolvable. The `--filter` below is what
+    # selects the package.
     rootDir: .
     buildCommand: npm i -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter server build
     startCommand: pnpm --filter server start
     healthCheckPath: /health
     envVars:
-      - key: RPC_URL
-        value: https://api.devnet.solana.com
-      - key: PROGRAM_ID
+      # --- Where the game's state lives -----------------------------------
+      # REQUIRED. Not a cache: a round not written here is a round a redeploy
+      # loses, along with the obligation to pay whoever guessed in it. Supabase
+      # connection string (Project Settings -> Database -> URI), or any
+      # Postgres. The schema is created on boot from src/db/schema.sql.
+      - key: DATABASE_URL
         sync: false
-      - key: AUTHORITY_KEYPAIR
+
+      # --- The wallet prizes are sent from --------------------------------
+      # REQUIRED. Accepts the Solana CLI's JSON byte array or a base58 export.
+      # Whoever holds this key can empty the wallet, so it should hold only
+      # what the game needs in play.
+      - key: PAYOUT_KEYPAIR
         sync: false
-      - key: WEB_ORIGIN
-        sync: false
-      - key: PORT
-        value: 4000
-      # REQUIRED. Derives every round's commit-reveal seed (server/src/secrets.ts).
-      # Generate with `openssl rand -hex 32`. As sensitive as the authority key:
-      # whoever holds it can predict every future roll. Must stay STABLE --
-      # rotating it mid-round strands that round's commit.
+
+      # --- Commit-reveal ---------------------------------------------------
+      # REQUIRED. Derives every round's seed (src/secrets.ts). Generate with
+      # `openssl rand -hex 32`. As sensitive as the payout key: whoever holds
+      # it can predict every future roll. Must stay STABLE — rotating it
+      # mid-round means the revealed seed no longer opens the published commit.
       - key: MASTER_SECRET
         sync: false
-      # SPL mint players must hold. Omit to run with the gate disabled.
+
+      # --- Chain -----------------------------------------------------------
+      # This single value decides play money vs real money:
+      #   https://api.devnet.solana.com        -> free test SOL
+      #   https://api.mainnet-beta.solana.com  -> REAL SOL
+      # Public endpoints rate-limit hard; a provider key (Helius, QuickNode)
+      # is worth setting before real traffic.
+      - key: RPC_URL
+        sync: false
+
+      # SPL mint a player must hold. Leave unset to run with the gate OFF,
+      # which lets anyone who finds the URL play for the real prize.
       - key: GATE_MINT
         sync: false
-      # Spend caps for coordinator-funded picks (server/src/guessIntake.ts).
-      # The house pays ~0.0013 SOL of rent per guess, so these bound how much a
-      # burst can cost before the sweeper reclaims it.
+
+      # --- CORS ------------------------------------------------------------
+      # Vercel gives every preview deployment its own URL; previews are blocked
+      # unless listed here alongside production.
+      - key: WEB_ORIGIN
+        sync: false
+
+      # --- Optional --------------------------------------------------------
+      # Prize for the first round on a FRESH database only, in lamports. After
+      # that the stored value wins, since it carries the previous round's tile
+      # effect. Scales the whole ladder (pump/penalty/rug move with it).
+      # - key: BASE_PRIZE_LAMPORTS
+      #   value: 500000000
       - key: MAX_PICKS_PER_ROUND
         value: 500
-      - key: AUTHORITY_MIN_BALANCE_SOL
-        value: 1
       - key: MAX_GUESSES_PER_SOCKET
         value: 5

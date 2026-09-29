@@ -3,10 +3,9 @@ import { PublicKey } from "@solana/web3.js";
 export const RPC_URL =
   process.env.NEXT_PUBLIC_RPC_URL ?? "https://api.devnet.solana.com";
 
-export const PROGRAM_ID = new PublicKey(
-  process.env.NEXT_PUBLIC_PROGRAM_ID ??
-    "Fg6PaFpoGXkYsidMpWTK6W2BeZ7FEfcYkg476zPFsLnS"
-);
+/* `NEXT_PUBLIC_PROGRAM_ID` is deliberately gone. There is no on-chain program
+   any more, so nothing derived an address from it -- leaving the variable in
+   place would invite someone to set it and expect it to matter. */
 
 /**
  * The coordinator. Everything a player does goes through it.

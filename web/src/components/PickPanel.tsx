@@ -32,7 +32,7 @@ export function PickPanel() {
         // and what would fix it, rather than leaving the pads mysteriously
         // inert -- the balance check is cheap and happens before any signing.
         <div style={{ marginTop: 6, fontSize: 14 }}>
-          <div style={{ color: "var(--bad)", fontWeight: 700 }}>
+          <div style={{ color: "var(--danger)", fontWeight: 700 }}>
             {gate.loading ? "Checking your balance..." : "Holders only"}
           </div>
           {!gate.loading && (

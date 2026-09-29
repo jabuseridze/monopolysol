@@ -5,6 +5,7 @@ import "./panels.css";
 import "./hud.css";
 import "./rules.css";
 import "./landing.css";
+import "./results.css";
 import { Providers } from "./providers";
 
 /**

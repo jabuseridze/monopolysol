@@ -8,9 +8,31 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 The tile the avatar *lands on* does not decide the winner — the dice sum does. Landing only applies a prize modifier to the **next** round (GO bonus, Random Pump, Gas Fee, Get Rugged, Slippage Tax); see `shared/src/effects.ts`.
 
-- **Currency:** Devnet SOL (free from faucet) — no real money at risk
-- **Status:** Not audited; Devnet only. Reference art is placeholders; rebrand before mainnet
-- **Tech Stack:** Anchor (Rust on-chain), Node.js coordinator (Socket.IO), Next.js + React Three Fiber (frontend)
+- **Currency:** whatever `RPC_URL` points at. Devnet = free test SOL; mainnet = **real money**. That one variable is the only difference.
+- **Status:** Not audited. Reference art is placeholders; rebrand before mainnet
+- **Tech Stack:** Node.js coordinator (Socket.IO + Postgres), Next.js + React Three Fiber (frontend)
+
+### The game is OFF-CHAIN as of 2026-09-29 — read this first
+
+There is **no smart contract any more**. The Anchor program in `program/` is kept,
+untouched and still passing its 28 tests, but nothing deploys or calls it. Deploying it to
+mainnet costs ~1.9 SOL of rent-exempt deposit, which was the only thing blocking launch,
+and it bought exactly one property the game could do without: proof.
+
+What replaced its two jobs:
+
+| Was | Is now |
+|-----|--------|
+| Round/pick state in Solana accounts | Postgres (`server/src/db/`) |
+| `payout` instruction from a keyless vault | `SystemProgram.transfer` from a normal wallet (`server/src/wallet.ts`) |
+| Pick PDA seeding = one guess per address | `PRIMARY KEY (round_id, player)` |
+| `PlayerPick.claimed` | `picks.paid`, set in the same transaction as the transfer |
+
+**What this costs, stated plainly:** prizes are no longer pinned on-chain to the winner.
+The address recorded when the guess was accepted is the only record of who is owed, so
+**never let a caller-supplied address reach `payWinner`** — read it back from `picks`.
+Commit-reveal survived unchanged, so the dice are still verifiable against a published
+hash; what is gone is the chain *enforcing* that.
 
 ## Monorepo Structure
 
@@ -19,54 +41,60 @@ This is a **pnpm workspace** with four packages:
 | Package | Purpose | Language | Deployment |
 |---------|---------|----------|-----------|
 | `shared/` | Board config, types, constants consumed by all packages | TypeScript | npm workspace |
-| `program/` | Anchor (Rust) smart contract; owns rounds, picks, vault, payouts | Rust + TypeScript tests | Solana Devnet |
-| `server/` | Express + Socket.IO coordinator; drives 2-min loop, settles winners | Node.js/TypeScript | Render |
+| `program/` | **Dormant.** The old Anchor contract, kept so the move off-chain is one revert away | Rust + TypeScript tests | not deployed |
+| `server/` | Express + Socket.IO coordinator; owns rounds, picks, payouts | Node.js/TypeScript | Render + Postgres |
 | `web/` | Next.js + React Three Fiber; 3D board, hologram draw, HUD | React/TypeScript | Vercel |
 
 ### Key Architectural Insight: The Round Loop
 
 The coordinator (server) orchestrates the game loop:
 
-1. **Open phase:** Coordinator posts round on-chain (`open_round`), broadcasts state to web clients
+1. **Open phase:** Coordinator writes the round to Postgres with its commit hash, broadcasts state to web clients
 2. **Guess phase:** Players **paste a wallet address** — there is no wallet extension and nothing to connect. The client asks the coordinator over Socket.IO (`client:guess`, acked) and the **coordinator signs and funds the pick on the player's behalf**. See "Walletless play" below
-3. **Reveal phase:** After the window closes, the coordinator reveals the seed and calls `reveal_and_draw`
-4. **Settlement:** Coordinator calls `settle`, broadcasts the result **immediately**, then drains a background payout queue (~1s apart) — the next round opens without waiting for payouts
+3. **Reveal phase:** After the window closes, the coordinator reveals the seed, derives the dice, walks the avatar and applies the landing tile's effect to the *next* round's prize
+4. **Settlement:** The round is marked settled, the result is broadcast **immediately**, then a background payout queue drains (~1s apart) — the next round opens without waiting for payouts
 
-**Randomness:** Commit–reveal: the coordinator commits `keccak256(seed)` on-chain before guessing opens, then reveals `seed` after. The program verifies the hash and derives both dice from `keccak256(seed ‖ round_id)`.
+**Randomness:** Commit–reveal, unchanged by the move off-chain. The coordinator publishes `keccak256(seed)` before guessing opens and reveals `seed` after; both dice come from `keccak256(seed ‖ round_id)`. The seed is *derived*, never stored — `HMAC(MASTER_SECRET, round_id)` in `server/src/secrets.ts` — so any restart can recompute it.
 
-**Winner counting:** `settle` takes **no winner count**. `tally` visits every pick in batches
-(`remaining_accounts`), re-derives each PDA before counting it, and marks it `counted` so a retried
-batch is a no-op. `settle` refuses until `round.tallied == round.total_picks`, so the divisor
-`payout` uses is derived by the chain rather than asserted by the coordinator.
+**This is now a promise rather than a proof.** Nothing forces the operator to publish honestly. Rotating `MASTER_SECRET` mid-round makes the revealed seed fail to open the published commit, which is exactly the evidence a player would cite to call the game rigged.
 
-**Payouts:** `payout` is **permissionless** — the destination is pinned on-chain to the pick's own player and a `claimed` flag makes it idempotent, so anyone may pay a winner and nobody can redirect a prize. That is what lets the coordinator auto-pay, and what makes the results modal's "Resend payout" button safe to expose to anybody.
+**Winner counting:** a `SELECT` on `picks` for the winning sum. The share is
+`floor(prize / winners)`, and the remainder stays in the wallet — paying `ceil` to everyone
+would spend more than the prize.
 
-### Walletless play — read before changing `submit_guess`
+**Payouts:** `payOnce` (`server/src/db/picks.ts`) claims the pick row `FOR UPDATE`, re-checks
+`paid` inside the transaction, sends, then records the signature. That is the whole defence
+against a double payout on a retry — it replaces the on-chain `claimed` flag and must stay in
+one transaction with the transfer it records.
+
+**Tile effects:** `nextPrizeForLanding` in `shared/src/effects.ts` takes an optional
+`baseLamports`. The ladder (pump ×2, penalty ×0.5, rug ×0.2, GO bonus ×0.2) scales from it, so
+running at smaller stakes moves every effect together. Omitting it reproduces the original
+0.5 SOL values exactly, which is why all 44 shared tests were unaffected.
+
+### Walletless play — read before changing guess intake
 
 There is **no wallet connection anywhere in the app**. Players paste an address; the coordinator
-signs and pays for their pick. Three properties hold this together, and breaking any one of them
-breaks the game's security:
+records the pick and later sends the prize. Two properties hold this together:
 
-1. **`submit_guess` is authority-only** (`payer` is constrained to `config.authority`). The player is
-   a plain `UncheckedAccount` that never signs. Removing that constraint would let anyone create
-   picks for any address straight against the program, out of reach of every server-side limit.
-2. **The token gate is checked against `player`, never the signer.** `token_gate::enforce` reads the
-   *owner field out of the token account's own bytes*, so not even the coordinator can pass someone
-   else's holdings to sneak a non-holder in (there is a test for exactly this).
-3. **Prizes are pinned to `pick.player`.** The coordinator can choose *whether* you are paid, never
-   *who* is paid.
+1. **The token gate is checked against the pasted address, never the connection.**
+   `Wallet.holdsGateToken` reads that address's own associated token account, so a holder cannot
+   lend their balance to admit a non-holder. This is standard SPL and never depended on our
+   program, which is why it survived the move off-chain unchanged.
+2. **Prizes go to the address stored in `picks`.** `payWinner` takes whatever it is handed, so the
+   recorded address is the only record of who is owed — never pass a caller-supplied one.
 
-**Accepted trade-offs (decided 2026-08-27 — do not silently "fix" these):**
+**Accepted trade-offs (decided 2026-08-27, revised 2026-09-29 — do not silently "fix" these):**
 
-- The coordinator is now **required** to play, and it **asserts intent**: it says which number you
-  picked, where your signature used to prove it. A buggy or dishonest operator could submit a
-  different number. Inherent to walletless play.
+- The coordinator **asserts intent**: it records which number you picked, where your signature
+  used to prove it. A buggy or dishonest operator could record a different number. Inherent to
+  walletless play, and now also true of the dice themselves.
 - **Griefing is possible.** Anyone who knows an address can ask the coordinator to guess for it,
-  burning that address's one pick for the round. They cannot steal the prize. Mitigated by rate
+  burning that address's one pick for the round. They cannot steal the prize. Mitigated by the
   limits in `server/src/guessIntake.ts` only.
-- **The house pays ~0.0013 SOL of rent per guess.** `close_pick` + `pickSweeper.ts` reclaim it after
-  settlement; without that sweep the outflow is permanent and unbounded. `guessIntake.ts` also
-  enforces a balance floor and a per-round pick cap so a burst cannot empty the authority wallet.
+- **Accepting a guess is now free.** It used to cost ~0.0013 SOL of pick rent, which is why the
+  balance floor and the pick sweeper existed; both are gone. The house pays only when it pays a
+  winner.
 
 ## Common Development Commands
 
@@ -123,11 +151,14 @@ pnpm test                     # Runs `anchor test` via package.json script
 ### Server (.env, not committed)
 ```bash
 cd server && cp .env.example .env
-# Set:
-#   PROGRAM_ID=<deployed_id>           # From anchor keys list
-#   AUTHORITY_KEYPAIR_PATH=~/.config/solana/id.json
-#   WEB_ORIGIN=http://localhost:3000   # For CORS (Vercel URL in prod)
-#   RPC_URL=https://api.devnet.solana.com
+# Required:
+#   DATABASE_URL=postgresql://...      # Supabase, or any Postgres. Schema self-creates.
+#   PAYOUT_KEYPAIR_PATH=~/.config/solana/id.json   # or PAYOUT_KEYPAIR (JSON array OR base58)
+#   MASTER_SECRET=$(openssl rand -hex 32)          # derives every round's seed
+# Usually set:
+#   RPC_URL=https://api.devnet.solana.com          # mainnet-beta = REAL MONEY
+#   GATE_MINT=<spl mint>               # blank = anyone may play
+#   WEB_ORIGIN=http://localhost:3000   # CORS (Vercel URL in prod)
 ```
 
 ### Web (.env.local, not committed)
@@ -155,13 +186,14 @@ cd web && cp .env.example .env.local
 
 ### Server (`server/src/`)
 - **index.ts:** Express setup, Socket.IO wiring, presence, and the two acked client requests (`client:guess`, `client:retryPayout`)
-- **guessIntake.ts:** Validation, rate limits and the spend cap for coordinator-submitted guesses. The only place a player request becomes a transaction the house pays for.
-- **pickSweeper.ts:** Closes settled picks to reclaim rent. Retries winners, whose picks cannot close until they are paid.
-- **roundLoop.ts` / `roundPhases.ts`:** The round cycle: open → guess window → reveal → settle
+- **guessIntake.ts:** Validation, token gate, per-socket and per-round limits. The only place a player request becomes a claim on the prize pot.
+- **db/schema.sql:** `rounds`, `picks`, `game_state`. Created on boot; safe to re-run.
+- **db/rounds.ts` / `db/picks.ts`:** Every query. `payOnce` is the double-payout defence.
+- **db/client.ts:** Pool, TLS, and `tx()` for work that must not come apart.
+- **wallet.ts:** Sends prizes (`SystemProgram.transfer`) and reads the token gate.
+- **roundLoop.ts` / `roundPhases.ts` / `roundOpen.ts`:** The round cycle: open → guess window → reveal → settle
 - **payouts.ts:** Background payout queue (~1s spacing, retry with backoff). Runs *outside* the round loop so a slow payout never stalls the game.
-- **chain.ts:** Solana RPC calls (`open_round`, `submit_guess`, `reveal_and_draw`, `settle`, `payout`, `close_pick`)
-- **anchorCodec.ts:** Anchor account deserialization (hardcoded offsets — see the append-only rule below)
-- **pdas.ts:** Program Derived Addresses (config, treasury, round, picks)
+- **secrets.ts:** `HMAC(MASTER_SECRET, round_id)` → the round's seed. Derived, never stored.
 
 ### Web (`web/src/`)
 - **app/**: Next.js app router; `globals.css` holds the palette tokens, `hud.css` the HUD
@@ -254,14 +286,13 @@ The wallet that runs `migrate` becomes the **authority** and must sign all coord
 
 **Player guesses a dice sum:**
 - The player pastes an address. The client emits `client:guess { address, sum }` and waits for the ack.
-- `server/src/guessIntake.ts` validates and rate-limits, then the coordinator signs `submit_guess` with itself as `payer` and the pasted address as a **non-signing** `player`.
-- The chain enforces one guess per address per round (the pick PDA is seeded on round + player, so a second attempt fails with "already in use") and, when armed, the token gate — checked against the *pasted address*, never the signer.
-- The coordinator observes the new pick when it next polls `getProgramAccounts`, and re-broadcasts the updated counts.
+- `server/src/guessIntake.ts` validates and rate-limits, checks the gate against the *pasted address*, then inserts into `picks`.
+- One guess per address per round is enforced by `PRIMARY KEY (round_id, player)` — the insert simply returns no row on a duplicate.
+- The picking loop re-reads `guessCounts` every ~4s and re-broadcasts the pad counters.
 
 **Draw (round timer fires):**
-- Coordinator calls `reveal_and_draw` with the revealed seed
-- Program verifies `keccak256(seed)` matches the on-chain commit, then derives both dice from the hash
-- Coordinator calls `settle`, **broadcasts the result immediately**, and hands the winners to the background payout queue
+- Coordinator derives the dice from the revealed seed, walks the avatar, and applies the landing tile's effect to the *next* round's prize
+- The round is marked settled, the result is **broadcast immediately**, and the winners go to the background payout queue
 
 **Randomness verification:** anyone with the revealed seed can recompute the dice independently using the same hash function.
 
@@ -281,36 +312,49 @@ The wallet that runs `migrate` becomes the **authority** and must sign all coord
   round that could never be revealed, players who could never be paid, and a loop retrying forever.
   `MASTER_SECRET` is as sensitive as the authority key and must stay **stable**; rotating it
   mid-round strands that round exactly as the file loss did.
-- **`expire_round` is permissionless on purpose.** It exists for the case where the authority itself
-  is gone, so gating it on the authority would make it useless. It moves no lamports — the prize is
-  never escrowed (`open_round` only *checks* the treasury balance), so a stuck round strands state,
-  not funds: `payout` and `close_pick` both gate on a terminal phase.
-- **The upgrade authority is live.** Whoever holds it can replace the program and drain the
-  treasury. Burn it or move it to a multisig before real money.
-- **`withdraw_treasury` cannot see outstanding prizes.** A settled round whose winners are not yet
-  paid is an obligation totalled nowhere on chain, so draining the vault leaves `payout` failing with
-  `InsufficientTreasury` and those winners unpaid. Withdraw between rounds. This is the one hazard
-  the instruction cannot check for itself.
+- **The database is not a cache.** It is where the game lives. A round not written to Postgres is a
+  round a redeploy loses, along with the guesses in it and the obligation to pay them. This used to
+  come free from the chain, which is why `RoundLoop` could always rebuild itself by reading it back.
+- **`payOnce` must stay one transaction.** It claims the pick `FOR UPDATE`, re-checks `paid`, sends,
+  then records the signature. A transfer that lands without its flag set is a double payout waiting
+  for the next retry; a flag set without the transfer is a winner silently never paid.
+- **Prizes go to the address in `picks`, never a caller-supplied one.** The on-chain `payout` pinned
+  the destination so even the operator could not redirect it. Nothing enforces that now.
+- **`open_round` refuses to start a round the wallet cannot cover.** Kept from the on-chain rule.
+  Taking guesses against a prize that will bounce at settle time is worse than not opening.
 - **`WEB_ORIGIN` is a CORS allowlist.** Vercel preview deployments get unique URLs and will be
   blocked unless listed.
 
 ### Constraints that are easy to break silently
 
-- **`PlayerPick` is 53 bytes** — `server/src/chain.ts` filters on `dataSize: 53`. A stale value there
-  returns zero picks with no error, which silently breaks settlement. The trailing byte is `counted`,
-  added when winner counting moved on-chain.
-- **`GlobalConfig` changes must be append-only** — `server/src/anchorCodec.ts` reads hardcoded byte offsets.
-- **`GameError` variants must be appended**, never reordered — the discriminant is the wire format.
-- **The web client never touches the chain for writes.** Instruction account lists live in `server/src/chain.ts` and must be edited by hand to match the Rust; a rename means recomputing `sha256("global:<name>")[..8]`.
+- **`PRIMARY KEY (round_id, player)` is a security control, not tidiness.** It is what makes a
+  second guess from one address impossible. Enforce it with the key, never a prior `SELECT`: two
+  concurrent requests both pass a check-then-insert, and a second claim on a split prize is a
+  direct loss to the honest winners.
+- **The round deadline is set in the server's clock domain**, passed into `openRound` rather than
+  computed as Postgres `now() + interval`. Letting the database set it puts any skew between the
+  two hosts straight into the countdown players see.
+- **The dice derivation is published, not internal.** `keccak256(seed ‖ round_id_le)` folded to two
+  d6, with `u64le` in `server/src/seed.ts`. Changing any of it invalidates every past reveal.
 - **`.overlay` is `pointer-events: none`** with `auto` restored on its children. HUD components must be direct children of it (i.e. rendered from `Hud`), or they silently receive no clicks.
 
 ### Scale
 
-Sized for ~100 concurrent players, not 10k. The known ceiling is `getProgramAccounts`: pick PDAs are never closed, so the RPC node's scan grows with total game history rather than with the current round. Fixing that needs an index, not a smaller payload. **A paid RPC endpoint is required before any real traffic** — server and client endpoints are configured separately (`RPC_URL` vs `NEXT_PUBLIC_RPC_URL`) so they can point at different providers.
+Sized for ~100 concurrent players, not 10k. The old `getProgramAccounts` ceiling is gone — pick
+lookups are now indexed Postgres queries scoped to one round. The remaining limits are the RPC
+endpoint (one token-gate read per guess, one transfer per payout) and Socket.IO fan-out from a
+single process. **A provider RPC key is worth having before real traffic** — server and client are
+configured separately (`RPC_URL` vs `NEXT_PUBLIC_RPC_URL`) so they can point at different providers.
 
 ## Troubleshooting
 
-- **"Program not found" on-chain:** Verify `PROGRAM_ID` matches `anchor keys list` output and `Anchor.toml`
-- **Coordinator crashes:** Check `AUTHORITY_KEYPAIR_PATH` exists and points to valid keypair
-- **Web can't connect to coordinator:** Verify `NEXT_PUBLIC_WS_URL` is set and coordinator is running
-- **Transactions fail:** Ensure Devnet RPC is reachable and coordinator has SOL for fees
+- **Refuses to boot, "Missing DATABASE_URL":** the round loop has nowhere to store state. Set the
+  Postgres connection string; the schema creates itself.
+- **`SyntaxError: Unexpected token 'j'`:** a base58 key hitting `JSON.parse`. Both formats are
+  accepted now (`server/src/bs58.ts`) — if you still see this, the key is malformed.
+- **"payout wallet holds N lamports, below the … prize":** fund the wallet named in the message.
+  The loop refuses to open a round it cannot pay.
+- **Web can't connect to coordinator:** verify `NEXT_PUBLIC_WS_URL`, and that the browser's origin
+  is in `WEB_ORIGIN` — a missing origin is a silent CORS rejection.
+- **Rounds stop after a deploy:** Render's free plan sleeps after ~15 minutes idle. The loop must
+  stay awake; use the paid plan.
