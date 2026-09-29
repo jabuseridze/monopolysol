@@ -83,8 +83,10 @@ export function ResultsModal() {
   return (
     <div className="results-scrim">
       {youWon && <Confetti />}
+      {/* No round number. It named nothing a player can act on, and the card
+          is already unambiguous about which round it reports -- it appears
+          once, at the end of that round's own draw. */}
       <div className="panel results-card">
-        <div className="panel-band band-purple">Round {settled.roundId}</div>
         <div className="results-body">
           <div className="results-sum">{winningSum ?? "-"}</div>
           <div className="results-sum-label">Winning sum</div>

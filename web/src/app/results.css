@@ -36,7 +36,9 @@
 }
 
 .results-body {
-  padding: 20px 22px 22px;
+  /* Roomier at the top than the sides: the band that used to cap the card
+     is gone, so this padding is all that separates the sum from the edge. */
+  padding: 28px 22px 22px;
 }
 
 /* --- The number the whole round was about -------------------------------- */
