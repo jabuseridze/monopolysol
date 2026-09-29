@@ -34,10 +34,14 @@ import { CLUSTER, EXPLORER_ON, GATE_MINT_ADDRESS } from "@/lib/explorerLinks";
  */
 function Wordmark() {
   // Sits inside the plaque's interior and follows the top rail's rise.
-  // Ends low, centre high, following the top rail's rise. The control point
-  // is pulled well past the visual apex because a quadratic only reaches a
-  // quarter of the way toward it: mid-curve y is (y0 + 2*yc + y1) / 4.
-  const BASELINE = "M 252 180 Q 516 124 780 180";
+  // Solved against the artwork, not eyeballed. Both of the plaque's gold rails
+  // arch together, so its interior centre-line rises ~37 units from the ends to
+  // mid-span. Matching that took two constraints -- the apex baseline, and the
+  // rise across the span the glyphs actually occupy (the middle ~86% of the
+  // path, not all of it) -- remembering that a quadratic only reaches a quarter
+  // of the way toward its control point. A shallower curve left the ends high
+  // and the centre low; a steeper one dropped M and L toward the bottom rail.
+  const BASELINE = "M 252 194 Q 516 94 780 194";
   return (
     <svg className="landing-wordmark" viewBox="0 0 1024 572" aria-hidden focusable="false">
       <defs>
@@ -45,7 +49,7 @@ function Wordmark() {
         <linearGradient
           id="sol-gradient"
           gradientUnits="userSpaceOnUse"
-          x1="626" y1="106" x2="748" y2="178"
+          x1="626" y1="116" x2="748" y2="188"
         >
           <stop offset="5%" stopColor="#9945ff" />
           <stop offset="52%" stopColor="#19d3f5" />
