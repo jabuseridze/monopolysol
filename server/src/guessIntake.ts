@@ -1,23 +1,26 @@
-import { LAMPORTS_PER_SOL, PublicKey } from "@solana/web3.js";
+import { PublicKey } from "@solana/web3.js";
 import { AckResult } from "@monopoly-sol/shared";
 import { GUESS_MAX, GUESS_MIN } from "@monopoly-sol/shared/effects";
 import { AppConfig } from "./config.js";
-import { Chain } from "./chain.js";
-import { associatedTokenAddress } from "./ata.js";
+import { insertPick } from "./db/picks.js";
+import { Wallet } from "./wallet.js";
 
 /**
- * The one place a player's request turns into a transaction the house pays for.
+ * The one place a player's request becomes a claim on the prize pot.
  *
  * Players paste an address instead of connecting a wallet, so they cannot sign
- * and cannot fund their own pick -- the coordinator does both. That makes this
- * the only spend-side attack surface in the server, and the reason every check
- * below exists. The chain re-verifies everything that matters (the token gate
- * reads the token account's own owner field, and the pick PDA's `init` enforces
- * one guess per address per round); these checks exist to reject the obvious
- * cases *before* burning a transaction fee on a guaranteed failure, and to stop
- * an unbounded drain of the authority wallet.
+ * for themselves -- this process records the pick on their behalf. Accepting a
+ * guess no longer costs a transaction, so the old balance floor and rent
+ * accounting are gone; what remains is the part that still matters, which is
+ * bounding how many claims one connection can stake on a shared pot.
  *
- * Deliberately dependency-free: a Map and a few counters, reset each round.
+ * The duplicate check is enforced twice on purpose. The in-memory set below is
+ * a fast reject; the real guarantee is the `picks` primary key, because two
+ * concurrent requests for one address can both pass an in-memory check and a
+ * second claim on a split prize is a direct loss to the honest winners.
+ *
+ * Deliberately dependency-free beyond that: a Map and a few counters, reset
+ * each round.
  */
 export interface RoundWindow {
   roundId: number;
@@ -31,12 +34,12 @@ export class GuessIntake {
   private perSocket = new Map<string, number>();
   private addresses = new Set<string>();
   /** Sockets with a submit in flight -- one at a time, so a client cannot
-   * pipeline requests faster than the chain can reject them. */
+   * pipeline requests faster than they can be rejected. */
   private inFlight = new Set<string>();
 
   constructor(
     private cfg: AppConfig,
-    private chain: Chain,
+    private wallet: Wallet,
     private window: () => RoundWindow | null
   ) {}
 
@@ -66,10 +69,7 @@ export class GuessIntake {
     }
     const key = player.toBase58();
 
-    // Cheap in-memory duplicate check. The chain enforces this too (the pick
-    // PDA's `init` fails on a second guess), but catching it here saves a fee.
     if (this.addresses.has(key)) return no("This address already guessed this round.");
-
     if (this.inFlight.has(socketId)) return no("Still submitting your last guess.");
     if ((this.perSocket.get(socketId) ?? 0) >= this.cfg.maxGuessesPerSocket) {
       return no("Too many guesses from this connection this round.");
@@ -80,31 +80,31 @@ export class GuessIntake {
 
     this.inFlight.add(socketId);
     try {
-      // Balance floor. The house funds every pick (~0.0013 SOL of rent plus
-      // fees), so without this a burst of guesses could empty the wallet that
-      // also has to open rounds, reveal, settle and pay winners -- taking the
-      // whole game down rather than just refusing a guess.
-      const lamports = await this.chain.connection.getBalance(this.cfg.authority.publicKey);
-      if (lamports < this.cfg.minAuthoritySol * LAMPORTS_PER_SOL) {
-        console.error("[intake] authority balance below floor; refusing guesses");
-        return no("The game is temporarily not accepting guesses.");
+      // Checked against the *pasted address*, never the connection: a holder
+      // cannot lend their balance to admit a non-holder.
+      if (!(await this.wallet.holdsGateToken(key))) {
+        return no("This address doesn't hold the game token.");
       }
 
-      const ata = this.cfg.gateMint ? associatedTokenAddress(player, this.cfg.gateMint) : null;
-      await this.chain.submitGuess(w.roundId, player, sum, ata);
+      // The authority on duplicates: returns false when the primary key
+      // rejects a second pick for this address.
+      if (!(await insertPick(w.roundId, key, sum))) {
+        return no("This address already has a guess this round.");
+      }
 
       this.addresses.add(key);
       this.picksThisRound++;
       this.perSocket.set(socketId, (this.perSocket.get(socketId) ?? 0) + 1);
       return { ok: true };
     } catch (e: unknown) {
-      return no(explain(e));
+      console.error("[intake] submit failed:", e instanceof Error ? e.message : e);
+      return no("Couldn't submit that guess. Try again.");
     } finally {
       this.inFlight.delete(socketId);
     }
   }
 
-  /** Addresses that got a pick in this round -- the sweeper's work list. */
+  /** Addresses that got a pick in this round. */
   submitted(): string[] {
     return [...this.addresses];
   }
@@ -116,19 +116,3 @@ export class GuessIntake {
 }
 
 const no = (reason: string): AckResult => ({ ok: false, reason });
-
-/**
- * Turn a chain error into something worth showing a player.
- *
- * Only two cases are worth naming. "already in use" is the pick PDA rejecting a
- * second guess -- which is also exactly what a griefed player sees, so the
- * wording avoids accusing them of having guessed. `TokenGateFailed` is the
- * holder check, the one thing a player can actually act on.
- */
-function explain(e: unknown): string {
-  const msg = e instanceof Error ? e.message : String(e);
-  if (/already in use/i.test(msg)) return "This address already has a guess this round.";
-  if (/TokenGateFailed/i.test(msg)) return "This address doesn't hold the game token.";
-  console.error("[intake] submit failed:", msg);
-  return "Couldn't submit that guess. Try again.";
-}

@@ -53,6 +53,19 @@ export interface RoundStateDTO {
    * value; binding a UI counter to this field would pin it at zero forever.
    */
   onlineWallets: number;
+  /**
+   * The wallet prizes are paid from, for the "verify payouts" link.
+   *
+   * Broadcast rather than configured in the client: it used to be derived
+   * locally from the program id, and the two could not disagree. Now that
+   * prizes come from an ordinary wallet only the server knows, a
+   * `NEXT_PUBLIC_*` copy would be baked in at build time and silently point at
+   * the old wallet for as long as nobody redeployed the frontend -- showing
+   * players a page with none of their payouts on it.
+   *
+   * Null until the first snapshot arrives.
+   */
+  payoutWallet: string | null;
 }
 
 /** Per-second lightweight update to avoid resending the full snapshot. */

@@ -1,12 +1,11 @@
 import { DRAW_SEQUENCE_BUFFER_MS, drawSequenceDurationMs, RoundStateDTO } from "@monopoly-sol/shared";
-import { PHASE_OPEN, PHASE_SETTLED } from "./anchorCodec.js";
-import { Chain } from "./chain.js";
-import { ClusterClock } from "./clusterClock.js";
+import { unpaidWinners, winnersFor } from "./db/picks.js";
+import { getRound, getState } from "./db/rounds.js";
 import { Emitter } from "./emitter.js";
 import { PayoutQueue } from "./payouts.js";
-import { PickSweeper } from "./pickSweeper.js";
 import { drawAndSettle, LoopCtx, pickingPhase } from "./roundPhases.js";
 import { openNewRound, resumeOpenRound } from "./roundOpen.js";
+import { Wallet } from "./wallet.js";
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
@@ -14,42 +13,37 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * Orchestration shell only -- per-phase logic lives in `roundOpen.ts` (open
  * / resume-open) and `roundPhases.ts` (picking tick loop, reveal-through-
  * payout). On every iteration (including after a recovered crash), `cycle()`
- * reads the *current* on-chain round instead of blindly opening a new one:
+ * reads the *stored* current round instead of blindly opening a new one:
  *
- *   - phase Open,  now <  locksAt -> resume the picking-window tick loop
- *   - phase Open,  now >= locksAt -> skip straight to reveal
- *   - phase Drawn                 -> skip picking + reveal, go to settle + payout
- *   - phase Settled (or no round) -> open a new round
+ *   - phase open,    now <  locksAt -> resume the picking-window tick loop
+ *   - phase open,    now >= locksAt -> skip straight to reveal
+ *   - phase drawn                   -> skip picking + reveal, go to settle
+ *   - phase settled (or no round)   -> open a new round
  *
  * This is what lets a `kill -9` mid-round resume the same round on restart
- * instead of orphaning it and opening a duplicate.
- *
- * Phase-boundary decisions use `ClusterClock` (`clusterClock.ts`), not raw
- * `Date.now()`: the program gates `reveal_and_draw` on the cluster's own
- * `Clock` sysvar, which can drift from host wall time (especially on a local
- * validator). `drawAndSettle()` in `roundPhases.ts` polls the real cluster
- * clock before firing the reveal tx, so this loop never speculatively fires
- * a reveal the program will reject.
+ * instead of orphaning it and opening a duplicate. That recovery used to come
+ * free from reading the chain back; it now depends entirely on the round
+ * having been written to Postgres, which is why the database is a hard
+ * dependency rather than a cache.
  */
 export class RoundLoop {
   private snapshot: RoundStateDTO = emptySnapshot();
   private readonly ctx: LoopCtx;
 
   constructor(
-    private chain: Chain,
-    private emit: Emitter,
+    wallet: Wallet,
+    emit: Emitter,
     masterSecret: string,
     payouts: PayoutQueue,
-    sweeper: PickSweeper
+    private readonly basePrize: number
   ) {
-    const clock = new ClusterClock(chain);
+    this.snapshot.payoutWallet = wallet.address.toBase58();
     this.ctx = {
-      chain,
+      wallet,
       emit,
-      clock,
       masterSecret,
       payouts,
-      sweeper,
+      basePrize,
       setState: (patch) => this.setState(patch),
     };
   }
@@ -62,23 +56,27 @@ export class RoundLoop {
    * Re-enqueue a settled round's unpaid winners.
    *
    * The recovery path for walletless play: a player who pasted an address has
-   * no key to sign `payout` with, so if the background queue exhausted its
-   * retries this is the only way the prize moves. Re-reading the winners from
-   * the chain rather than trusting a caller-supplied list is what makes it safe
-   * to expose to anyone -- and `payout` is idempotent (`pick.claimed`) and pins
-   * its destination, so a redundant call is a no-op rather than a double spend.
+   * no key of their own here, so if the background queue exhausted its retries
+   * this is the only way the prize moves. The winners and their share are
+   * re-read from storage rather than trusted from the caller, which is what
+   * makes it safe to expose to anyone -- and `payOnce` re-checks `paid` inside
+   * its transaction, so a redundant call sends nothing.
    */
   async retryPayouts(roundId: number): Promise<{ ok: true } | { ok: false; reason: string }> {
-    const round = await this.chain.getRound(roundId);
+    const round = await getRound(roundId);
     if (!round) return { ok: false, reason: "That round doesn't exist yet." };
-    if (round.phase !== PHASE_SETTLED) {
-      return { ok: false, reason: "That round hasn't settled yet." };
-    }
-    const { byGuess } = await this.chain.getPicks(roundId);
-    const winners = byGuess[round.diceA + round.diceB] ?? [];
-    if (winners.length === 0) return { ok: false, reason: "That round had no winners." };
+    if (round.phase !== "settled") return { ok: false, reason: "That round hasn't settled yet." };
 
-    this.ctx.payouts.enqueue(roundId, winners);
+    const sum = (round.diceA ?? 0) + (round.diceB ?? 0);
+    // The share must be recomputed from the FULL winner list, not the unpaid
+    // remainder -- dividing the prize among whoever is left would overpay the
+    // stragglers and drain more than the round was ever worth.
+    const everyone = await winnersFor(roundId, sum);
+    if (everyone.length === 0) return { ok: false, reason: "That round had no winners." };
+    const outstanding = await unpaidWinners(roundId, sum);
+    if (outstanding.length === 0) return { ok: false, reason: "Every winner has already been paid." };
+
+    this.ctx.payouts.enqueue(roundId, outstanding, Math.floor(round.prizeLamports / everyone.length));
     return { ok: true };
   }
 
@@ -99,54 +97,46 @@ export class RoundLoop {
     this.emit.state(this.snapshot);
   }
 
-  private async cycle(): Promise<void> {
-    await this.ctx.clock.sync();
-    const cfg = await this.chain.getConfig();
-    if (!cfg) {
-      console.warn("[roundLoop] config not initialized; retrying...");
-      await sleep(5000);
-      return;
-    }
+  private get emit(): Emitter {
+    return this.ctx.emit;
+  }
 
-    const currentRoundId = Number(cfg.currentRound);
-    const round = currentRoundId > 0 ? await this.chain.getRound(currentRoundId) : null;
+  private async cycle(): Promise<void> {
+    const state = await getState(this.basePrize);
+    const round = state.currentRound > 0 ? await getRound(state.currentRound) : null;
 
     let roundId: number;
     let locksAtMs: number;
     let seed: Buffer | null;
-    let phase: number;
+    let wasOpen: boolean;
 
-    if (!round || round.phase === PHASE_SETTLED) {
-      const opened = await openNewRound(this.ctx, cfg);
-      ({ roundId, locksAtMs, seed } = opened);
-      phase = PHASE_OPEN;
+    if (!round || round.phase === "settled") {
+      ({ roundId, locksAtMs, seed } = await openNewRound(this.ctx, state));
+      wasOpen = true;
+    } else if (round.phase === "open") {
+      ({ roundId, locksAtMs, seed } = await resumeOpenRound(this.ctx, round, state));
+      wasOpen = true;
     } else {
-      roundId = currentRoundId;
-      locksAtMs = Number(round.locksAt) * 1000;
-      phase = round.phase;
-      if (round.phase === PHASE_OPEN) {
-        seed = resumeOpenRound(this.ctx, round, cfg).seed;
-      } else {
-        console.log(`[roundLoop] resuming round ${roundId} in Drawn phase; skipping to settle`);
-        seed = null;
-      }
+      console.log(`[roundLoop] resuming round ${round.roundId} in drawn phase; skipping to settle`);
+      roundId = round.roundId;
+      locksAtMs = round.locksAtMs;
+      seed = null;
+      wasOpen = false;
     }
 
-    if (phase === PHASE_OPEN) {
-      if (this.ctx.clock.now() < locksAtMs) {
+    if (wasOpen) {
+      if (Date.now() < locksAtMs) {
         await pickingPhase(this.ctx, roundId, locksAtMs);
       } else {
         this.setState({ phase: "locked", secondsLeft: 0 });
       }
     }
 
-    const { diceSum, drawResultAt } = await drawAndSettle(this.ctx, roundId, cfg.numTiles, seed);
-    // Sleep measured from `drawResultAt` (when the client's choreography
-    // clock starts), not a flat delay tacked on after settle/payout -- the
-    // client's draw sequence is dynamic-length (a 12-step walk takes longer
-    // than a 2-step one), and settle/payout latency itself is variable. This
-    // is what keeps the next round from ever opening mid-celebration
-    // regardless of either source of variance.
+    const { diceSum, drawResultAt } = await drawAndSettle(this.ctx, roundId, state.numTiles, seed);
+    // Sleep measured from `drawResultAt` (when the client's choreography clock
+    // starts), not a flat delay after settle -- the client's draw sequence is
+    // dynamic-length (a 12-step walk takes longer than a 2-step one). This is
+    // what keeps the next round from opening mid-celebration.
     const readyAt = drawResultAt + drawSequenceDurationMs(diceSum) + DRAW_SEQUENCE_BUFFER_MS;
     await sleep(Math.max(0, readyAt - Date.now()));
   }
@@ -170,5 +160,6 @@ function emptySnapshot(): RoundStateDTO {
     winners: [],
     nextPrizeLamports: 0,
     onlineWallets: 0,
+    payoutWallet: null,
   };
 }

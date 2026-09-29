@@ -6,7 +6,7 @@ import { solscanAccount, solscanTx } from "@monopoly-sol/shared/explorer";
 import { useIdentity } from "@/hooks/useIdentity";
 import { useRetryPayout } from "@/hooks/useRetryPayout";
 import { useGame } from "@/hooks/useGame";
-import { CLUSTER, EXPLORER_ON, TREASURY } from "@/lib/explorerLinks";
+import { CLUSTER, EXPLORER_ON } from "@/lib/explorerLinks";
 import { Confetti } from "./Confetti";
 
 /**
@@ -93,8 +93,8 @@ export function ResultsModal() {
         </div>
         {settled.winners.length === 0 ? (
           // No rollover: `settle.rs` dropped the accumulation branch in the
-          // dice-walk pivot, so an unclaimed prize simply stays in the treasury.
-          <div style={{ color: "var(--muted)" }}>Nobody guessed it - the prize stays in the treasury.</div>
+          // dice-walk pivot, so an unclaimed prize simply stays in the wallet.
+          <div style={{ color: "var(--muted)" }}>Nobody guessed it - the prize rolls on.</div>
         ) : (
           <div style={{ fontSize: 15 }}>
             {settled.winners.length} winner{settled.winners.length > 1 ? "s" : ""} guessed{" "}
@@ -146,13 +146,14 @@ export function ResultsModal() {
             View your payout on Solscan
           </a>
         )}
-        {/* The vault the prize actually leaves from. Its Solscan page lists
+        {/* The wallet the prize actually leaves from. Its Solscan page lists
             every payout to every winner, so anyone can audit the whole game --
-            not just their own round. */}
-        {settled.winners.length > 0 && EXPLORER_ON && (
+            not just their own round. Read from live round state, not env: only
+            the server knows which wallet is paying. */}
+        {settled.winners.length > 0 && EXPLORER_ON && round?.payoutWallet && (
           <div style={{ marginTop: 10 }}>
             <a
-              href={solscanAccount(TREASURY, CLUSTER)}
+              href={solscanAccount(round.payoutWallet, CLUSTER)}
               target="_blank"
               rel="noreferrer"
               style={{ color: "var(--crate)", fontSize: 12 }}

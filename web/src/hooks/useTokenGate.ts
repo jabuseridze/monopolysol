@@ -5,7 +5,7 @@ import { PublicKey } from "@solana/web3.js";
 import { connection } from "@/lib/connection";
 import { useIdentity } from "./useIdentity";
 import { GATE_MINT } from "@/lib/env";
-import { associatedTokenAddress } from "@/lib/pdas";
+import { associatedTokenAddress } from "@/lib/spl";
 
 export interface TokenGate {
   /** False when no mint is configured -- the game is open to everyone. */

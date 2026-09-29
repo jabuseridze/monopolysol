@@ -1,33 +1,46 @@
-import { u64le } from "./pdas.js";
+const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
 
-/** base58 of a u64 little-endian value, for getProgramAccounts memcmp filters. */
-export function bs58le(n: number | bigint): string {
-  // @solana/web3.js re-exports bs58 via PublicKey; encode manually here to
-  // avoid pulling in an extra dependency for one call site.
-  return bs58encode(u64le(n));
+/**
+ * Decode a secret key in either form a key actually arrives in.
+ *
+ * The Solana CLI writes `[12,34,...]`; every browser wallet exports base58.
+ * Only the first used to be accepted, and pasting the other failed with
+ * `SyntaxError: Unexpected token 'j'` from inside `JSON.parse` -- an error
+ * that names neither keys nor formats, and which cost a real debugging
+ * session to trace back to a paste.
+ */
+export function decodeSecretKey(raw: string): Uint8Array {
+  const bytes = raw.startsWith("[") ? Uint8Array.from(JSON.parse(raw)) : bs58decode(raw);
+  if (bytes.length !== 64) {
+    throw new Error(
+      `Expected a 64-byte secret key, got ${bytes.length} bytes. ` +
+        `A 32-byte value is a PUBLIC key or a seed, not a keypair.`
+    );
+  }
+  return bytes;
 }
 
-// Minimal base58 encoder (Bitcoin alphabet).
-const ALPHABET = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
-function bs58encode(buf: Buffer): string {
-  const digits = [0];
-  for (const byte of buf) {
-    let carry = byte;
-    for (let i = 0; i < digits.length; i++) {
-      carry += digits[i]! << 8;
-      digits[i] = carry % 58;
-      carry = (carry / 58) | 0;
+/** Minimal base58 decoder (Bitcoin alphabet). */
+export function bs58decode(s: string): Uint8Array {
+  const bytes: number[] = [0];
+  for (const ch of s) {
+    const value = ALPHABET.indexOf(ch);
+    if (value < 0) throw new Error(`Invalid base58 character '${ch}' in key`);
+    let carry = value;
+    for (let i = 0; i < bytes.length; i++) {
+      carry += bytes[i]! * 58;
+      bytes[i] = carry & 0xff;
+      carry >>= 8;
     }
     while (carry > 0) {
-      digits.push(carry % 58);
-      carry = (carry / 58) | 0;
+      bytes.push(carry & 0xff);
+      carry >>= 8;
     }
   }
-  let str = "";
-  for (const b of buf) {
-    if (b === 0) str += "1";
+  // Each leading '1' is a literal leading zero byte, not a digit.
+  for (const ch of s) {
+    if (ch === "1") bytes.push(0);
     else break;
   }
-  for (let i = digits.length - 1; i >= 0; i--) str += ALPHABET[digits[i]!];
-  return str;
+  return Uint8Array.from(bytes.reverse());
 }

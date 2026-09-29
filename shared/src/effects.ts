@@ -21,6 +21,20 @@ export const PUMP_PRIZE_LAMPORTS = Math.round(1.0 * LAMPORTS_PER_SOL);
 /** GO bonus: 0.1 SOL, added to non-penalty tiles. */
 export const GO_BONUS_LAMPORTS = Math.round(0.1 * LAMPORTS_PER_SOL);
 
+/**
+ * The prize ladder as ratios of the base prize.
+ *
+ * The constants above are the ladder at its default 0.5 SOL base, and are kept
+ * because tests, copy and the UI all reference them by name. These ratios are
+ * what let the whole ladder be re-scaled together: running the game at a
+ * tenth of the stakes has to move Random Pump and Get Rugged with it, or a
+ * "cheap" round still pays a full 1 SOL the moment the avatar lands on a pump.
+ */
+const RATIO_PENALTY = PENALTY_PRIZE_LAMPORTS / BASE_PRIZE_LAMPORTS; // 0.5
+const RATIO_RUG = RUG_PRIZE_LAMPORTS / BASE_PRIZE_LAMPORTS;         // 0.2
+const RATIO_PUMP = PUMP_PRIZE_LAMPORTS / BASE_PRIZE_LAMPORTS;       // 2.0
+const RATIO_GO = GO_BONUS_LAMPORTS / BASE_PRIZE_LAMPORTS;           // 0.2
+
 /** Penalty tile indices (Gas Fee, Slippage Tax). */
 export const PENALTY_TILES = new Set([4, 38]);
 
@@ -48,31 +62,37 @@ export const GUESS_MAX = 12;
  *
  * @param landedTile - The tile index the avatar landed on
  * @param passedOrLandedGo - Whether the avatar passed or landed on GO
+ * @param baseLamports - Base prize to scale the ladder from. Defaults to
+ *   `BASE_PRIZE_LAMPORTS` (0.5 SOL), which reproduces the original values
+ *   exactly. Lower it to run the same game for smaller stakes -- every tile
+ *   effect scales with it, so the relationships players learn stay intact.
  * @returns The prize in lamports for the next round
  */
 export function nextPrizeForLanding({
   landedTile,
   passedOrLandedGo,
+  baseLamports = BASE_PRIZE_LAMPORTS,
 }: {
   landedTile: number;
   passedOrLandedGo: boolean;
+  baseLamports?: number;
 }): number {
-  const goBonus = passedOrLandedGo ? GO_BONUS_LAMPORTS : 0;
+  const goBonus = passedOrLandedGo ? Math.round(baseLamports * RATIO_GO) : 0;
 
   if (PENALTY_TILES.has(landedTile)) {
-    return PENALTY_PRIZE_LAMPORTS; // Penalties suppress GO bonus
+    return Math.round(baseLamports * RATIO_PENALTY); // Penalties suppress GO bonus
   }
 
   if (landedTile === RUG_TILE) {
-    return RUG_PRIZE_LAMPORTS; // Rug also suppresses GO bonus
+    return Math.round(baseLamports * RATIO_RUG); // Rug also suppresses GO bonus
   }
 
   if (PUMP_TILES.has(landedTile)) {
-    return PUMP_PRIZE_LAMPORTS + goBonus;
+    return Math.round(baseLamports * RATIO_PUMP) + goBonus;
   }
 
   // Everything else: base prize + GO bonus
-  return BASE_PRIZE_LAMPORTS + goBonus;
+  return baseLamports + goBonus;
 }
 
 /**

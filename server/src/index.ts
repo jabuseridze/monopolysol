@@ -3,14 +3,14 @@ import cors from "cors";
 import express from "express";
 import { Server } from "socket.io";
 import { ClientToServerEvents, ServerToClientEvents, SOCKET_EVENTS } from "@monopoly-sol/shared";
-import { Chain } from "./chain.js";
 import { loadConfig } from "./config.js";
+import { migrate } from "./db/client.js";
 import { Emitter } from "./emitter.js";
 import { GuessIntake } from "./guessIntake.js";
 import { PayoutQueue } from "./payouts.js";
-import { PickSweeper } from "./pickSweeper.js";
 import { PresenceTracker } from "./presence.js";
 import { RoundLoop } from "./roundLoop.js";
+import { solOf, Wallet } from "./wallet.js";
 
 async function main() {
   const cfg = loadConfig();
@@ -18,12 +18,16 @@ async function main() {
   app.use(cors({ origin: cfg.corsOrigins }));
   app.get("/health", (_req, res) => res.json({ ok: true }));
 
+  // Before anything can serve: a round that is not written here is a round a
+  // redeploy loses, along with its guesses and the obligation to pay them.
+  await migrate();
+
   const server = http.createServer(app);
   const io = new Server<ClientToServerEvents, ServerToClientEvents>(server, {
     cors: { origin: cfg.corsOrigins },
   });
 
-  const chain = new Chain(cfg);
+  const wallet = new Wallet(cfg.rpcUrl, cfg.payer, cfg.gateMint);
 
   const emit: Emitter = {
     state: (s) => io.emit(SOCKET_EVENTS.roundState, s),
@@ -52,14 +56,11 @@ async function main() {
     payouts: (p) => io.emit(SOCKET_EVENTS.payouts, p),
   };
 
-  const payouts = new PayoutQueue(chain, emit.payouts);
-  const sweeper = new PickSweeper(chain);
-  const loop = new RoundLoop(chain, emit, cfg.masterSecret, payouts, sweeper);
+  const payouts = new PayoutQueue(wallet, emit.payouts);
+  const loop = new RoundLoop(wallet, emit, cfg.masterSecret, payouts, cfg.basePrizeLamports);
 
-  // The guessing window, read fresh on every request. `locksAtWall` is the
-  // wall-clock deadline; `locksAt` is on the cluster clock, which runs at a
-  // different rate on a local validator and would reject guesses early.
-  const intake = new GuessIntake(cfg, chain, () => {
+  // The guessing window, read fresh on every request.
+  const intake = new GuessIntake(cfg, wallet, () => {
     const s = loop.getSnapshot();
     return { roundId: s.roundId, locksAt: s.locksAtWall, open: s.phase === "open" };
   });
@@ -76,8 +77,8 @@ async function main() {
     socket.on("client:hello", (walletBase58) => presence.hello(socket.id, walletBase58));
 
     // Players paste an address instead of connecting a wallet, so the
-    // coordinator signs and funds their pick. `guessIntake` holds every limit
-    // that keeps that from draining the house wallet.
+    // coordinator records the pick on their behalf. `guessIntake` holds every
+    // limit bounding how many claims one connection can stake on the pot.
     socket.on("client:guess", (p, ack) => {
       void intake
         .submit(socket.id, p?.address ?? "", p?.sum ?? -1)
@@ -85,9 +86,9 @@ async function main() {
         .catch(() => ack({ ok: false, reason: "Couldn't submit that guess. Try again." }));
     });
 
-    // Walletless players cannot sign a payout for themselves, so this is their
-    // only recovery path if the queue gave up. Safe for anyone to call: the
-    // destination is pinned on-chain to the winner.
+    // Walletless players cannot pay themselves, so this is their only recovery
+    // path if the queue gave up. Safe for anyone to call: the destination and
+    // the share are re-read from storage, never taken from the caller.
     socket.on("client:retryPayout", (p, ack) => {
       const roundId = Number(p?.roundId);
       if (!Number.isInteger(roundId) || roundId < 0) {
@@ -96,7 +97,7 @@ async function main() {
       void loop
         .retryPayouts(roundId)
         .then(ack)
-        .catch(() => ack({ ok: false, reason: "Couldn't reach the chain. Try again." }));
+        .catch(() => ack({ ok: false, reason: "Couldn't reach the payout queue. Try again." }));
     });
 
     socket.on("disconnect", () => {
@@ -107,9 +108,12 @@ async function main() {
 
   server.listen(cfg.port, () => {
     console.log(`[coordinator] listening on :${cfg.port}`);
-    console.log(`[coordinator] program ${cfg.programId.toBase58()}`);
-    console.log(`[coordinator] authority ${cfg.authority.publicKey.toBase58()}`);
+    console.log(`[coordinator] payout wallet ${wallet.address.toBase58()}`);
+    console.log(`[coordinator] gate ${cfg.gateMint?.toBase58() ?? "disabled (anyone may play)"}`);
   });
+
+  const lamports = await wallet.balance();
+  console.log(`[coordinator] payout wallet holds ${solOf(lamports).toFixed(4)} SOL`);
 
   await loop.run();
 }

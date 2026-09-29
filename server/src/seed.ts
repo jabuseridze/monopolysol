@@ -5,9 +5,17 @@ import { randomBytes } from "node:crypto";
 // undefined at runtime even though it typechecks. The default import always
 // works because Node always exposes the whole CJS `module.exports` as it.
 import sha3 from "js-sha3";
-import { u64le } from "./pdas.js";
 
 const { keccak256 } = sha3;
+
+/** A u64 as 8 little-endian bytes. The dice derivation hashes the round id in
+ * this exact layout, so it is part of the published algorithm rather than an
+ * implementation detail -- changing it would invalidate every past reveal. */
+export function u64le(n: number | bigint): Buffer {
+  const b = Buffer.alloc(8);
+  b.writeBigUInt64LE(BigInt(n));
+  return b;
+}
 
 /** A committed secret for one round: keep `seed` private until reveal. */
 export interface RoundSecret {

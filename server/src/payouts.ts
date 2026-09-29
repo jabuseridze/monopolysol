@@ -1,6 +1,6 @@
-import { PublicKey } from "@solana/web3.js";
 import { PayoutProgressDTO } from "@monopoly-sol/shared";
-import { Chain } from "./chain.js";
+import { payOnce } from "./db/picks.js";
+import { Wallet } from "./wallet.js";
 
 /**
  * Pays winners *off* the round loop.
@@ -21,9 +21,9 @@ import { Chain } from "./chain.js";
  * screen -- and pacing them keeps a big winner list from becoming a burst of
  * traffic against the same RPC endpoint every player is also using. */
 const SPACING_MS = 1000;
-/** Attempts per winner before giving up and leaving it to a manual claim.
- * Retrying is safe: `payout` is idempotent on-chain via `pick.claimed`, so a
- * retry after an ambiguous timeout can never double-pay. */
+/** Attempts per winner before giving up. Retrying is safe: `payOnce` claims
+ * the pick row `FOR UPDATE` and re-checks `paid` inside the transaction, so a
+ * retry after an ambiguous timeout cannot double-pay. */
 const MAX_ATTEMPTS = 3;
 /** Backoff between attempts for one winner. */
 const RETRY_BASE_MS = 2000;
@@ -32,7 +32,9 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 interface Job {
   roundId: number;
-  winners: PublicKey[];
+  winners: string[];
+  /** Each winner's equal share, fixed by the caller at settle time. */
+  share: number;
 }
 
 export class PayoutQueue {
@@ -40,14 +42,14 @@ export class PayoutQueue {
   private running = false;
 
   constructor(
-    private readonly chain: Chain,
+    private readonly wallet: Wallet,
     private readonly emit: (p: PayoutProgressDTO) => void
   ) {}
 
   /** Hand a round's winners over and return immediately. */
-  enqueue(roundId: number, winners: PublicKey[]): void {
-    if (winners.length === 0) return;
-    this.jobs.push({ roundId, winners });
+  enqueue(roundId: number, winners: string[], share: number): void {
+    if (winners.length === 0 || share <= 0) return;
+    this.jobs.push({ roundId, winners, share });
     // Deliberately not awaited: the caller is the round loop, and the whole
     // point is that it does not wait for this.
     void this.drain();
@@ -66,17 +68,16 @@ export class PayoutQueue {
     }
   }
 
-  private async payRound({ roundId, winners }: Job): Promise<void> {
+  private async payRound({ roundId, winners, share }: Job): Promise<void> {
     const paid: Record<string, string> = {};
     const failed: string[] = [];
 
     for (let i = 0; i < winners.length; i++) {
       const winner = winners[i]!;
-      const key = winner.toBase58();
-      const sig = await this.payOne(roundId, winner);
+      const sig = await this.payOne(roundId, winner, share);
 
-      if (sig) paid[key] = sig;
-      else failed.push(key);
+      if (sig) paid[winner] = sig;
+      else failed.push(winner);
 
       // Report after every winner rather than at the end, so a player sees
       // their own payout land without waiting on everyone else's.
@@ -88,22 +89,26 @@ export class PayoutQueue {
     if (failed.length > 0) {
       console.warn(
         `[payouts] round ${roundId}: ${failed.length} unpaid after ${MAX_ATTEMPTS} attempts ` +
-          `(claimable by the winner): ${failed.join(", ")}`
+          `(retryable from the results modal): ${failed.join(", ")}`
       );
     } else {
       console.log(`[payouts] round ${roundId}: paid ${winners.length} winner(s)`);
     }
   }
 
-  /** Returns the signature, or null once the retries are exhausted. */
-  private async payOne(roundId: number, winner: PublicKey): Promise<string | null> {
+  /** Returns the signature, or null once the retries are exhausted. A pick
+   * that was already paid also returns null -- and is reported as failed,
+   * which is correct for a retry: nothing was owed, so nothing was sent. */
+  private async payOne(roundId: number, winner: string, share: number): Promise<string | null> {
     for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
       try {
-        return await this.chain.payout(roundId, winner);
+        return await payOnce(roundId, winner, share, () =>
+          this.wallet.payWinner(winner, share)
+        );
       } catch (e) {
         const last = attempt === MAX_ATTEMPTS;
         console.error(
-          `[payouts] round ${roundId} winner ${winner.toBase58()} attempt ${attempt}/${MAX_ATTEMPTS} failed`,
+          `[payouts] round ${roundId} winner ${winner} attempt ${attempt}/${MAX_ATTEMPTS} failed`,
           last ? e : (e as Error)?.message ?? e
         );
         if (!last) await sleep(RETRY_BASE_MS * attempt);
