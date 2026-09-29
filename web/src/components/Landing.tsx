@@ -34,14 +34,21 @@ import { CLUSTER, EXPLORER_ON, GATE_MINT_ADDRESS } from "@/lib/explorerLinks";
  */
 function Wordmark() {
   // Sits inside the plaque's interior and follows the top rail's rise.
-  // Solved against the artwork, not eyeballed. Both of the plaque's gold rails
-  // arch together, so its interior centre-line rises ~37 units from the ends to
-  // mid-span. Matching that took two constraints -- the apex baseline, and the
-  // rise across the span the glyphs actually occupy (the middle ~86% of the
-  // path, not all of it) -- remembering that a quadratic only reaches a quarter
-  // of the way toward its control point. A shallower curve left the ends high
-  // and the centre low; a steeper one dropped M and L toward the bottom rail.
-  const BASELINE = "M 252 194 Q 516 94 780 194";
+  // Solved against the artwork, not eyeballed. The outer letters have to centre
+  // on the painted laurels (measured at y 141.5 left, 142 right) while the apex
+  // stays put, so with the apex pinned -- P1y = 2*apex - Ye -- the baseline
+  // where the glyphs begin collapses to one unknown:
+  //
+  //     y(start) = 0.7396 * Ye + 0.2604 * apex
+  //
+  // The 0.07..0.93 span is where the glyphs actually sit on the path, not its
+  // full length. Raising the ends WITHOUT that substitution does not work: the
+  // control point compensates and swallows half the movement, which cost an
+  // iteration. This arc is gentler than the frame's own rails (~17 units of
+  // rise against ~37); aligning to the laurels and tracing the rails pull
+  // slightly apart, and the laurels win because they are what the eye pairs
+  // the letters with.
+  const BASELINE = "M 252 168 Q 516 120 780 168";
   return (
     <svg className="landing-wordmark" viewBox="0 0 1024 572" aria-hidden focusable="false">
       <defs>
@@ -49,7 +56,7 @@ function Wordmark() {
         <linearGradient
           id="sol-gradient"
           gradientUnits="userSpaceOnUse"
-          x1="626" y1="116" x2="748" y2="188"
+          x1="626" y1="92" x2="748" y2="164"
         >
           <stop offset="5%" stopColor="#9945ff" />
           <stop offset="52%" stopColor="#19d3f5" />
