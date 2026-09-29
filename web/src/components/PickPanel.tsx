@@ -49,8 +49,10 @@ export function PickPanel() {
           </div>
         </>
       ) : (
+        // No round number here: it identified nothing a player can act on, and
+        // the results card already names the round it is reporting.
         <div className="panel-note">
-          Click a hologram pad to guess where the avatar lands, round #{round?.roundId ?? "-"}.
+          Click a hologram pad to guess where the avatar lands.
         </div>
       )}
       {/* States the entry requirement up front instead of only after a failed

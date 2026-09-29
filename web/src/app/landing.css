@@ -5,54 +5,57 @@
   position: fixed;
   inset: 0;
   display: grid;
-  place-items: center;
-  padding: 24px;
+  /* Not `place-items: center`: the art puts its plaque across the top quarter,
+     and a vertically centred card sat on top of the wordmark. Pushing the card
+     into the lower two-thirds lets the sign read and drops the card onto the
+     calm board area the art was composed to leave empty. */
+  place-items: start center;
+  padding: clamp(150px, 27vh, 300px) 24px 24px;
   overflow: auto;
   background: var(--bg-0);
 }
 
-/* The board art, oversized and blurred into wallpaper. `scale` past 100% hides
-   the soft edges the blur leaves at the boundary, and the slow drift keeps a
-   static image from reading as a stalled page. */
-.landing-bg {
+/* The hero art.
+ *
+ * Anchored to its own box rather than to the viewport, because the wordmark
+ * below has to land inside the plaque painted into the image. A plain
+ * `background: cover` on the page would crop unpredictably with the window's
+ * aspect ratio and the text would drift off the sign. Sizing this element to
+ * the image's own 1024x572 ratio and centring it reproduces `cover` exactly,
+ * while giving the wordmark a stable coordinate space to sit in.
+ */
+.landing-stage {
   position: absolute;
-  inset: -8%;
-  background: url("/board/board-art.png") center / cover no-repeat;
-  /* Was 9px, which reduced the board to an unrecognisable green-brown smear.
-     At 3px the tiles, property bands and GO corner are all readable, which is
-     the entire point of using the board as the wallpaper. */
-  filter: blur(3px) saturate(1.35) brightness(1.16);
-  transform: scale(1.08);
-  animation: landing-drift 48s ease-in-out infinite alternate;
+  inset: 0;
+  overflow: hidden;
 }
 
-@keyframes landing-drift {
-  from {
-    transform: scale(1.08) translate3d(-1.2%, -0.8%, 0) rotate(-0.6deg);
-  }
-  to {
-    transform: scale(1.14) translate3d(1.2%, 0.8%, 0) rotate(0.6deg);
-  }
+.landing-hero {
+  --hero-w: 1024;
+  --hero-h: 572;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  translate: -50% -50%;
+  width: max(100%, calc(100svh * var(--hero-w) / var(--hero-h)));
+  height: max(100%, calc(100vw * var(--hero-h) / var(--hero-w)));
+  background: url("/landing/hero.jpg") center / 100% 100% no-repeat;
 }
 
-/* Darkens the wallpaper so white card text stays legible over the board's
-   pale tiles, and warms the corners toward the app's own palette. */
-/* The board's own two colours rather than the old murky navy: the plaque
-   purple closing in at the edges, the green of the centre field glowing
-   through the middle. Dark enough at the rim to hold the card, open enough in
-   the centre to leave the board visible. */
+/* Kept far gentler than the old board wallpaper's scrim: this art was
+   commissioned with a deliberately calm, evenly-lit centre, so heavy darkening
+   would flatten the thing that makes it work. Just enough at the very bottom
+   to seat the card, plus a faint corner vignette. */
 .landing-scrim {
   position: absolute;
   inset: 0;
   background:
     radial-gradient(
-      70% 58% at 50% 44%,
-      rgba(170, 226, 96, 0.34) 0%,
-      rgba(120, 190, 90, 0.18) 32%,
-      rgba(60, 16, 110, 0.58) 68%,
-      rgba(26, 6, 58, 0.88) 100%
-    ),
-    linear-gradient(150deg, rgba(40, 8, 88, 0.22), rgba(20, 6, 48, 0.36));
+      62% 54% at 50% 62%,
+      rgba(26, 6, 58, 0) 0%,
+      rgba(26, 6, 58, 0.28) 62%,
+      rgba(16, 4, 40, 0.6) 100%
+    );
 }
 
 .landing-card {
@@ -62,12 +65,12 @@
 }
 
 .landing-body {
-  padding: 26px 30px 28px;
+  padding: 20px 26px 22px;
 }
 
 .landing-title {
-  margin: 0 0 10px;
-  font-size: 33px;
+  margin: 0 0 8px;
+  font-size: 29px;
   line-height: 1.08;
   font-weight: 600;
   letter-spacing: -0.02em;
@@ -75,9 +78,9 @@
 }
 
 .landing-lede {
-  margin: 0 0 20px;
-  font-size: 14px;
-  line-height: 1.5;
+  margin: 0 0 16px;
+  font-size: 13.5px;
+  line-height: 1.45;
   color: var(--muted-strong);
 }
 
@@ -186,7 +189,7 @@ button.landing-play:hover:not(:disabled) {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .landing-bg {
+  .landing-hero {
     animation: none;
   }
 }
@@ -197,5 +200,78 @@ button.landing-play:hover:not(:disabled) {
   }
   .landing-title {
     font-size: 22px;
+  }
+}
+
+/* --- The wordmark, seated in the plaque painted into the hero art -------- */
+
+/* Positioned as a share of `.landing-hero`, not the viewport, so it stays
+   inside the sign at every window size. The percentages are measured off the
+   source image: the plaque's flat interior spans roughly 23%-77% across and
+   centres on 22% down. */
+.landing-wordmark {
+  position: absolute;
+  left: 50%;
+  top: 21.5%;
+  translate: -50% -50%;
+  width: 50%;
+  display: flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 0.14em;
+  /* Scales with the art rather than the root font size -- the plaque is a
+     fixed share of the image, so the text has to be too or it outgrows the
+     frame on a wide monitor. */
+  font-size: min(5.6cqw, 4.4vw);
+  font-family: var(--font-display), var(--font-body);
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+.landing-hero {
+  container-type: inline-size;
+}
+
+/* MONOPOLY: cream face with a gold bevel under it, echoing the letterpress on
+   the board's own centre plaque. */
+.wordmark-main {
+  color: #f6f1e0;
+  letter-spacing: 0.005em;
+  text-shadow:
+    0 0.035em 0 #b8862a,
+    0 0.07em 0 #8a5f17,
+    0 0.1em 0.08em rgba(0, 0, 0, 0.45);
+}
+
+/* SOL: the one word that says which chain this is, so it gets the chain's own
+   colours rather than more gold. Reading "MONOPOLYSOL" as a single word was
+   the thing to avoid -- the gradient plus the divider break it in two without
+   needing a space, which the plaque has no room for. */
+.wordmark-sol {
+  background: linear-gradient(100deg, #9945ff 8%, #19d3f5 52%, #14f195 92%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  letter-spacing: 0.02em;
+  /* A shadow cannot sit under transparent text, so the depth comes from a
+     drop-shadow filter on the painted glyphs instead. */
+  filter: drop-shadow(0 0.04em 0.05em rgba(0, 0, 0, 0.55));
+}
+
+/* The diamond from the coin art, doing the job a space would. */
+.wordmark-gem {
+  color: var(--accent);
+  font-size: 0.42em;
+  transform: translateY(-0.55em);
+  filter: drop-shadow(0 0.06em 0.06em rgba(0, 0, 0, 0.5));
+}
+
+@media (max-width: 720px) {
+  /* The plaque crops off-screen on a narrow viewport; the card's own band
+     carries the name there instead. */
+  .landing-wordmark {
+    display: none;
   }
 }

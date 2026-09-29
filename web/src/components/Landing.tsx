@@ -32,8 +32,19 @@ export function Landing() {
           the door and the room unmistakably the same place, and costs nothing:
           the 3D scene loads this texture anyway, so it is already cached by the
           time the board appears. */}
-      <div className="landing-bg" aria-hidden />
-      <div className="landing-scrim" aria-hidden />
+      {/* The wordmark lives INSIDE `.landing-hero` so it inherits that
+          element's box, which is what keeps it seated in the plaque painted
+          into the art when the window is resized. */}
+      <div className="landing-stage" aria-hidden>
+        <div className="landing-hero">
+          <div className="landing-wordmark">
+            <span className="wordmark-main">MONOPOLY</span>
+            <span className="wordmark-gem">◆</span>
+            <span className="wordmark-sol">SOL</span>
+          </div>
+        </div>
+        <div className="landing-scrim" />
+      </div>
 
       <div className="panel landing-card">
         <div className="panel-band band-purple">{BOARD_NAME} · Solana</div>
