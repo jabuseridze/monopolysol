@@ -14,8 +14,12 @@ services:
     # only `server/` leaves that unresolvable. The `--filter` below is what
     # selects the package.
     rootDir: .
-    buildCommand: npm i -g pnpm@9.15.0 && pnpm install --frozen-lockfile && pnpm --filter server build
-    startCommand: pnpm --filter server start
+    # `npx pnpm@...` rather than `npm i -g pnpm`: Render's /usr/lib is a
+    # read-only filesystem, so a global install dies with
+    # `EROFS: read-only file system, rename '/usr/lib/node_modules/pnpm'`.
+    # npx resolves into a writable cache instead.
+    buildCommand: npx pnpm@9.15.0 install --frozen-lockfile && npx pnpm@9.15.0 --filter server build
+    startCommand: npx pnpm@9.15.0 --filter server start
     healthCheckPath: /health
     envVars:
       # --- Where the game's state lives -----------------------------------
